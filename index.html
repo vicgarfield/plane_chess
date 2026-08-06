@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>棋盘格打飞机 - 双人对战</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  color: #fff;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============ 通用 ============ */
+.hidden { display: none !important; }
+
+.btn {
+  padding: 12px 32px;
+  font-size: 18px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+  color: #fff;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+.btn:active { transform: translateY(0); }
+.btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); }
+.btn-danger { background: linear-gradient(135deg, #f85032, #e73827); }
+.btn-success { background: linear-gradient(135deg, #11998e, #38ef7d); }
+.btn-warning { background: linear-gradient(135deg, #f7971e, #ffd200); color: #333; }
+.btn-small { padding: 8px 20px; font-size: 14px; }
+
+/* ============ 开始画面 ============ */
+#screen-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+  animation: fadeIn 0.8s ease;
+}
+#screen-start h1 {
+  font-size: 56px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #f7971e, #ffd200);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+#screen-start .subtitle {
+  font-size: 20px;
+  color: #aaa;
+  margin-bottom: 40px;
+}
+.rules-box {
+  background: rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 24px 32px;
+  margin-bottom: 40px;
+  max-width: 600px;
+  text-align: left;
+  line-height: 1.8;
+  font-size: 15px;
+  color: #ccc;
+}
+.rules-box h3 { color: #ffd200; margin-bottom: 8px; }
+.plane-demo {
+  font-family: monospace;
+  font-size: 14px;
+  color: #38ef7d;
+  line-height: 1.4;
+  margin: 8px 0;
+  white-space: pre;
+}
+
+/* ============ 布阵画面 ============ */
+#screen-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  animation: fadeIn 0.5s ease;
+}
+.setup-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.setup-header h2 { font-size: 28px; color: #ffd200; }
+.setup-header p { color: #aaa; margin-top: 4px; }
+
+.setup-body {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.setup-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 180px;
+}
+.setup-controls .info-box {
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.setup-controls .info-box span { color: #ffd200; font-weight: bold; }
+.direction-label {
+  text-align: center;
+  font-size: 16px;
+  color: #38ef7d;
+  font-weight: bold;
+}
+
+/* ============ 棋盘 ============ */
+.board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.board-label {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #ccc;
+}
+.board {
+  display: grid;
+  grid-template-columns: 30px repeat(10, 1fr);
+  grid-template-rows: 30px repeat(10, 1fr);
+  gap: 1px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 1px;
+}
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #aaa;
+  background: rgba(255,255,255,0.05);
+}
+.board-corner {
+  background: rgba(255,255,255,0.03);
+}
+
+.cell {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: default;
+  transition: all 0.15s;
+  position: relative;
+  background: rgba(30, 40, 70, 0.8);
+}
+.cell.clickable { cursor: pointer; }
+.cell.clickable:hover { background: rgba(100, 120, 200, 0.4); }
+
+/* 飞机颜色 */
+.cell.plane-body { background: #2ecc71; color: #fff; }
+.cell.plane-head { background: #e74c3c; color: #fff; }
+.cell.plane-overlap { background: #c0392b; }
+
+/* 预览颜色 */
+.cell.preview-valid { background: rgba(46, 204, 113, 0.4); }
+.cell.preview-invalid { background: rgba(231, 76, 60, 0.4); }
+.cell.preview-head-valid { background: rgba(46, 204, 113, 0.7); }
+.cell.preview-head-invalid { background: rgba(231, 76, 60, 0.7); }
+
+/* 攻击结果 */
+.cell.attack-miss {
+  background: rgba(100, 100, 120, 0.6);
+  color: #888;
+}
+.cell.attack-hit {
+  background: #e67e22;
+  color: #fff;
+}
+.cell.attack-kill {
+  background: #e74c3c;
+  color: #fff;
+  animation: pulse 0.6s ease;
+}
+.cell.destroyed-body {
+  background: rgba(231, 76, 60, 0.3);
+  border: 1px solid rgba(231, 76, 60, 0.5);
+}
+
+/* 己方棋盘被攻击标记 */
+.cell.my-hit {
+  position: relative;
+}
+.cell.my-hit::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e67e22;
+  box-shadow: 0 0 6px #e67e22;
+}
+.cell.my-miss::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+}
+
+/* ============ 对战画面 ============ */
+#screen-battle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  animation: fadeIn 0.5s ease;
+}
+.battle-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.battle-header h2 { font-size: 28px; }
+.battle-header .turn-info { color: #ffd200; font-size: 18px; margin-top: 4px; }
+
+.battle-boards {
+  display: flex;
+  gap: 50px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.battle-stats {
+  display: flex;
+  gap: 40px;
+  margin-top: 16px;
+  font-size: 15px;
+}
+.battle-stats .stat { color: #aaa; }
+.battle-stats .stat strong { color: #ffd200; }
+
+.attack-log {
+  margin-top: 16px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px 20px;
+  max-width: 600px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: #aaa;
+  line-height: 1.6;
+}
+.attack-log .log-hit { color: #e67e22; }
+.attack-log .log-kill { color: #e74c3c; font-weight: bold; }
+.attack-log .log-miss { color: #888; }
+
+/* ============ 过渡遮罩 ============ */
+#overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 12, 41, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+#overlay h2 { font-size: 36px; margin-bottom: 12px; }
+#overlay p { font-size: 18px; color: #aaa; margin-bottom: 32px; }
+
+/* ============ 结算画面 ============ */
+#screen-gameover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+  animation: fadeIn 0.8s ease;
+}
+#screen-gameover h1 {
+  font-size: 48px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #f7971e, #ffd200);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#screen-gameover .winner-text { font-size: 24px; color: #38ef7d; margin-bottom: 24px; }
+
+.gameover-boards {
+  display: flex;
+  gap: 50px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+/* ============ 结果弹窗 ============ */
+.result-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 64px;
+  font-weight: bold;
+  z-index: 500;
+  pointer-events: none;
+  animation: popUp 1s ease forwards;
+  text-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+.result-popup.miss { color: #888; }
+.result-popup.hit { color: #e67e22; }
+.result-popup.kill { color: #e74c3c; }
+
+/* ============ 动画 ============ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+@keyframes popUp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  60% { transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+}
+@keyframes explode {
+  0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  100% { box-shadow: 0 0 20px 10px rgba(231, 76, 60, 0); }
+}
+
+/* ============ 响应式 ============ */
+@media (max-width: 960px) {
+  .cell { width: 34px; height: 34px; font-size: 12px; }
+  .battle-boards { gap: 20px; }
+  .setup-body { gap: 20px; }
+}
+@media (max-width: 600px) {
+  .cell { width: 28px; height: 28px; font-size: 10px; }
+  .board-header { font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== 开始画面 ====== -->
+<div id="screen-start">
+  <h1>棋盘格打飞机</h1>
+  <p class="subtitle">双人对战 - 同屏热座模式</p>
+  <div class="rules-box">
+    <h3>游戏规则</h3>
+    <p>1. 两名玩家各拥有一个 10×10 的棋盘，轮流在棋盘上布置 3 架飞机</p>
+    <p>2. 飞机形状（10格）如下，可旋转4个方向：</p>
+    <div class="plane-demo">      ✈       ← 机头
+  ■ ■ ✈ ■ ■   ← 机翼
+      ■
+    ■ ■ ■     ← 机尾</div>
+    <p>3. 双方布阵完成后，交替向对方棋盘开炮</p>
+    <p>4. 命中机头 → <strong style="color:#e74c3c">击落</strong>（飞机消失）｜命中机身 → <strong style="color:#e67e22">击伤</strong>｜未命中 → <strong style="color:#888">击空</strong></p>
+    <p>5. 首先击落对方全部 3 架飞机的玩家获胜！</p>
+  </div>
+  <button class="btn btn-primary" onclick="game.startGame()" style="font-size:22px; padding:16px 48px;">开始游戏</button>
+</div>
+
+<!-- ====== 布阵画面 ====== -->
+<div id="screen-setup" class="hidden">
+  <div class="setup-header">
+    <h2 id="setup-title">玩家 1 布阵</h2>
+    <p id="setup-subtitle">在棋盘上放置 3 架飞机（点击格子放置机头位置）</p>
+  </div>
+  <div class="setup-body">
+    <div class="board-container">
+      <div id="setup-board" class="board"></div>
+    </div>
+    <div class="setup-controls">
+      <div class="info-box">
+        <p>已放置：<span id="placed-count">0</span> / 3 架</p>
+        <p>当前方向：<span id="current-direction">朝上</span></p>
+      </div>
+      <div class="direction-label" id="direction-arrow">↑ 机头朝上</div>
+      <button class="btn btn-warning btn-small" onclick="game.rotatePreview()">旋转方向 (R)</button>
+      <button class="btn btn-danger btn-small" onclick="game.resetSetup()">重置全部</button>
+      <button class="btn btn-success btn-small hidden" id="btn-confirm-setup" onclick="game.confirmSetup()">确认布阵</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 对战画面 ====== -->
+<div id="screen-battle" class="hidden">
+  <div class="battle-header">
+    <h2 id="battle-title">对战阶段</h2>
+    <div class="turn-info" id="turn-info">玩家 1 的回合 - 请选择攻击位置</div>
+  </div>
+  <div class="battle-boards">
+    <div class="board-container">
+      <div class="board-label" id="my-board-label">我方棋盘</div>
+      <div id="my-board" class="board"></div>
+    </div>
+    <div class="board-container">
+      <div class="board-label" id="attack-board-label">对方棋盘（点击开炮）</div>
+      <div id="attack-board" class="board"></div>
+    </div>
+  </div>
+  <div class="battle-stats">
+    <div class="stat">玩家1 击落: <strong id="stat-p1-kills">0</strong>/3</div>
+    <div class="stat">玩家2 击落: <strong id="stat-p2-kills">0</strong>/3</div>
+    <div class="stat">回合: <strong id="stat-round">1</strong></div>
+  </div>
+  <div class="attack-log" id="attack-log"></div>
+</div>
+
+<!-- ====== 结算画面 ====== -->
+<div id="screen-gameover" class="hidden">
+  <h1>游戏结束</h1>
+  <div class="winner-text" id="winner-text"></div>
+  <div class="gameover-boards">
+    <div class="board-container">
+      <div class="board-label">玩家 1 的棋盘</div>
+      <div id="gameover-board1" class="board"></div>
+    </div>
+    <div class="board-container">
+      <div class="board-label">玩家 2 的棋盘</div>
+      <div id="gameover-board2" class="board"></div>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="game.restart()" style="font-size:20px;">再来一局</button>
+</div>
+
+<!-- ====== 过渡遮罩 ====== -->
+<div id="overlay" class="hidden">
+  <h2 id="overlay-title"></h2>
+  <p id="overlay-subtitle"></p>
+  <button class="btn btn-primary" id="overlay-btn" onclick="game.overlayConfirm()">准备好了</button>
+</div>
+
+<script>
+// =====================================================
+// Plane 类 - 飞机模型
+// =====================================================
+class Plane {
+  constructor(headX, headY, direction = 'up') {
+    this.headX = headX;
+    this.headY = headY;
+    this.direction = direction; // 'up' | 'down' | 'left' | 'right'
+  }
+
+  // 各方向的偏移量（参考 Plane.cs），以机头为原点 (0,0)
+  // 棋盘坐标：x 为列(0-9 左→右)，y 为行(0-9 上→下)
+  static OFFSETS = {
+    up:    [[0,0],[0,1],[-1,1],[1,1],[-2,1],[2,1],[0,2],[0,3],[-1,3],[1,3]],
+    down:  [[0,0],[0,-1],[-1,-1],[1,-1],[-2,-1],[2,-1],[0,-2],[0,-3],[-1,-3],[1,-3]],
+    left:  [[0,0],[1,0],[1,-1],[1,1],[1,-2],[1,2],[2,0],[3,0],[3,-1],[3,1]],
+    right: [[0,0],[-1,0],[-1,-1],[-1,1],[-1,-2],[-1,2],[-2,0],[-3,0],[-3,-1],[-3,1]]
+  };
+
+  static DIRECTION_NAMES = { up: '朝上', down: '朝下', left: '朝左', right: '朝右' };
+  static DIRECTION_ARROWS = { up: '↑ 机头朝上', down: '↓ 机头朝下', left: '← 机头朝左', right: '→ 机头朝右' };
+  static ROTATION_ORDER = ['up', 'right', 'down', 'left'];
+
+  getPoints() {
+    const offsets = Plane.OFFSETS[this.direction];
+    return offsets.map(([dx, dy]) => ({ x: this.headX + dx, y: this.headY + dy }));
+  }
+
+  getHeadPoint() {
+    return { x: this.headX, y: this.headY };
+  }
+
+  getBodyPoints() {
+    return this.getPoints().slice(1);
+  }
+
+  isInBounds(size = 10) {
+    return this.getPoints().every(p => p.x >= 0 && p.x < size && p.y >= 0 && p.y < size);
+  }
+
+  conflictsWith(other) {
+    const myPoints = this.getPoints();
+    const otherPoints = other.getPoints();
+    return myPoints.some(p1 => otherPoints.some(p2 => p1.x === p2.x && p1.y === p2.y));
+  }
+
+  rotate() {
+    const order = Plane.ROTATION_ORDER;
+    const idx = order.indexOf(this.direction);
+    this.direction = order[(idx + 1) % 4];
+  }
+
+  clone() {
+    return new Plane(this.headX, this.headY, this.direction);
+  }
+}
+
+// =====================================================
+// Board 类 - 棋盘模型
+// =====================================================
+class Board {
+  constructor(size = 10) {
+    this.size = size;
+    this.planes = [];
+    // attacks[y][x] = null | 'miss' | 'hit' | 'kill'
+    this.attacks = Array.from({ length: size }, () => Array(size).fill(null));
+    this.destroyedPlanes = []; // 被击落的飞机
+  }
+
+  addPlane(plane) {
+    if (!plane.isInBounds(this.size)) return false;
+    if (this.planes.some(p => plane.conflictsWith(p))) return false;
+    this.planes.push(plane);
+    return true;
+  }
+
+  resetPlanes() {
+    this.planes = [];
+  }
+
+  canPlace(plane) {
+    if (!plane.isInBounds(this.size)) return false;
+    return !this.planes.some(p => plane.conflictsWith(p));
+  }
+
+  receiveAttack(x, y) {
+    if (this.attacks[y][x] !== null) return { type: 'duplicate' };
+
+    for (const plane of this.planes) {
+      const head = plane.getHeadPoint();
+      if (head.x === x && head.y === y) {
+        this.attacks[y][x] = 'kill';
+        this.destroyedPlanes.push(plane);
+        return { type: 'kill', plane: plane };
+      }
+      const points = plane.getPoints();
+      if (points.some(p => p.x === x && p.y === y)) {
+        this.attacks[y][x] = 'hit';
+        return { type: 'hit' };
+      }
+    }
+
+    this.attacks[y][x] = 'miss';
+    return { type: 'miss' };
+  }
+
+  getKillCount() {
+    return this.destroyedPlanes.length;
+  }
+
+  isAllDestroyed() {
+    return this.destroyedPlanes.length >= 3;
+  }
+}
+
+// =====================================================
+// Game 类 - 游戏状态机 & UI 控制
+// =====================================================
+class Game {
+  constructor() {
+    this.phase = 'start';
+    this.currentPlayer = 1;
+    this.boards = [new Board(), new Board()];
+    this.setupDirection = 'up';
+    this.round = 1;
+    this.logs = [];
+    this.overlayCallback = null;
+  }
+
+  // ---- 阶段切换 ----
+  showScreen(id) {
+    ['screen-start', 'screen-setup', 'screen-battle', 'screen-gameover'].forEach(s => {
+      document.getElementById(s).classList.add('hidden');
+    });
+    document.getElementById(id).classList.remove('hidden');
+  }
+
+  showOverlay(title, subtitle, btnText, callback) {
+    const el = document.getElementById('overlay');
+    document.getElementById('overlay-title').textContent = title;
+    document.getElementById('overlay-subtitle').textContent = subtitle;
+    document.getElementById('overlay-btn').textContent = btnText;
+    el.classList.remove('hidden');
+    this.overlayCallback = callback;
+  }
+
+  hideOverlay() {
+    document.getElementById('overlay').classList.add('hidden');
+    this.overlayCallback = null;
+  }
+
+  overlayConfirm() {
+    const cb = this.overlayCallback;
+    this.hideOverlay();
+    if (cb) cb();
+  }
+
+  // ---- 开始游戏 ----
+  startGame() {
+    this.boards = [new Board(), new Board()];
+    this.currentPlayer = 1;
+    this.round = 1;
+    this.logs = [];
+    this.setupDirection = 'up';
+    this.phase = 'setup';
+    this.showScreen('screen-setup');
+    this.renderSetup();
+  }
+
+  restart() {
+    this.phase = 'start';
+    this.showScreen('screen-start');
+  }
+
+  // ---- 布阵阶段 ----
+  renderSetup() {
+    const board = this.boards[this.currentPlayer - 1];
+    document.getElementById('setup-title').textContent = `玩家 ${this.currentPlayer} 布阵`;
+    document.getElementById('setup-subtitle').textContent =
+      `在棋盘上放置 3 架飞机（点击格子选定机头位置）`;
+    document.getElementById('placed-count').textContent = board.planes.length;
+    document.getElementById('current-direction').textContent = Plane.DIRECTION_NAMES[this.setupDirection];
+    document.getElementById('direction-arrow').textContent = Plane.DIRECTION_ARROWS[this.setupDirection];
+
+    const confirmBtn = document.getElementById('btn-confirm-setup');
+    if (board.planes.length >= 3) {
+      confirmBtn.classList.remove('hidden');
+    } else {
+      confirmBtn.classList.add('hidden');
+    }
+
+    this.renderBoardForSetup('setup-board', board);
+  }
+
+  renderBoardForSetup(containerId, board) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    // corner
+    const corner = document.createElement('div');
+    corner.className = 'board-header board-corner';
+    container.appendChild(corner);
+
+    // column headers (0-9)
+    for (let x = 0; x < 10; x++) {
+      const h = document.createElement('div');
+      h.className = 'board-header';
+      h.textContent = x;
+      container.appendChild(h);
+    }
+
+    for (let y = 0; y < 10; y++) {
+      // row header (A-J)
+      const rh = document.createElement('div');
+      rh.className = 'board-header';
+      rh.textContent = String.fromCharCode(65 + y);
+      container.appendChild(rh);
+
+      for (let x = 0; x < 10; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+
+        if (board.planes.length < 3) {
+          cell.classList.add('clickable');
+          cell.addEventListener('click', () => this.onSetupClick(x, y));
+          cell.addEventListener('mouseenter', () => this.onSetupHover(x, y));
+          cell.addEventListener('mouseleave', () => this.clearPreview());
+        }
+
+        container.appendChild(cell);
+      }
+    }
+
+    // 绘制已放置的飞机
+    board.planes.forEach(plane => {
+      const head = plane.getHeadPoint();
+      const body = plane.getBodyPoints();
+      body.forEach(p => {
+        const c = this.getSetupCell(p.x, p.y);
+        if (c) c.classList.add('plane-body');
+      });
+      const hc = this.getSetupCell(head.x, head.y);
+      if (hc) {
+        hc.classList.add('plane-head');
+        hc.textContent = '✈';
+      }
+    });
+  }
+
+  getSetupCell(x, y) {
+    const board = document.getElementById('setup-board');
+    return board.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+  }
+
+  onSetupHover(x, y) {
+    this.clearPreview();
+    const board = this.boards[this.currentPlayer - 1];
+    if (board.planes.length >= 3) return;
+
+    const plane = new Plane(x, y, this.setupDirection);
+    const points = plane.getPoints();
+    const valid = board.canPlace(plane);
+
+    points.forEach((p, i) => {
+      const cell = this.getSetupCell(p.x, p.y);
+      if (cell) {
+        if (i === 0) {
+          cell.classList.add(valid ? 'preview-head-valid' : 'preview-head-invalid');
+        } else {
+          cell.classList.add(valid ? 'preview-valid' : 'preview-invalid');
+        }
+      }
+    });
+  }
+
+  clearPreview() {
+    document.querySelectorAll('#setup-board .cell').forEach(c => {
+      c.classList.remove('preview-valid', 'preview-invalid', 'preview-head-valid', 'preview-head-invalid');
+    });
+  }
+
+  onSetupClick(x, y) {
+    const board = this.boards[this.currentPlayer - 1];
+    if (board.planes.length >= 3) return;
+
+    const plane = new Plane(x, y, this.setupDirection);
+    if (board.addPlane(plane)) {
+      this.renderSetup();
+    }
+  }
+
+  rotatePreview() {
+    const order = Plane.ROTATION_ORDER;
+    const idx = order.indexOf(this.setupDirection);
+    this.setupDirection = order[(idx + 1) % 4];
+    document.getElementById('current-direction').textContent = Plane.DIRECTION_NAMES[this.setupDirection];
+    document.getElementById('direction-arrow').textContent = Plane.DIRECTION_ARROWS[this.setupDirection];
+  }
+
+  resetSetup() {
+    this.boards[this.currentPlayer - 1].resetPlanes();
+    this.setupDirection = 'up';
+    this.renderSetup();
+  }
+
+  confirmSetup() {
+    if (this.currentPlayer === 1) {
+      // 玩家1布阵完成，切换到玩家2
+      this.currentPlayer = 2;
+      this.setupDirection = 'up';
+      this.showOverlay(
+        '请将设备交给 玩家 2',
+        '玩家 1 已完成布阵，请勿偷看！',
+        '我是玩家 2，准备好了',
+        () => {
+          this.renderSetup();
+        }
+      );
+    } else {
+      // 玩家2布阵完成，进入对战
+      this.currentPlayer = 1;
+      this.phase = 'battle';
+      this.showOverlay(
+        '双方布阵完成！',
+        '游戏即将开始，玩家 1 先手攻击',
+        '玩家 1 准备好了',
+        () => {
+          this.showScreen('screen-battle');
+          this.renderBattle();
+        }
+      );
+    }
+  }
+
+  // ---- 对战阶段 ----
+  renderBattle() {
+    const attacker = this.currentPlayer;
+    const defender = attacker === 1 ? 2 : 1;
+
+    document.getElementById('turn-info').textContent =
+      `玩家 ${attacker} 的回合 - 请在右侧棋盘选择攻击位置`;
+    document.getElementById('my-board-label').textContent = `玩家 ${attacker} 的棋盘`;
+    document.getElementById('attack-board-label').textContent = `玩家 ${defender} 的棋盘（点击开炮）`;
+
+    // 渲染己方棋盘（显示飞机 + 对方的攻击痕迹）
+    this.renderMyBoard('my-board', this.boards[attacker - 1]);
+    // 渲染攻击棋盘（显示己方攻击结果）
+    this.renderAttackBoard('attack-board', this.boards[defender - 1]);
+
+    // 更新统计
+    document.getElementById('stat-p1-kills').textContent = this.boards[1].getKillCount();
+    document.getElementById('stat-p2-kills').textContent = this.boards[0].getKillCount();
+    document.getElementById('stat-round').textContent = this.round;
+
+    // 更新日志
+    this.renderLog();
+  }
+
+  renderMyBoard(containerId, board) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const corner = document.createElement('div');
+    corner.className = 'board-header board-corner';
+    container.appendChild(corner);
+    for (let x = 0; x < 10; x++) {
+      const h = document.createElement('div');
+      h.className = 'board-header';
+      h.textContent = x;
+      container.appendChild(h);
+    }
+
+    // 建立飞机位置映射（所有飞机均显示，包括被击落的）
+    const planeMap = {}; // "x,y" -> 'head' | 'body'
+    board.planes.forEach(plane => {
+      const head = plane.getHeadPoint();
+      planeMap[`${head.x},${head.y}`] = 'head';
+      plane.getBodyPoints().forEach(p => {
+        planeMap[`${p.x},${p.y}`] = 'body';
+      });
+    });
+
+    for (let y = 0; y < 10; y++) {
+      const rh = document.createElement('div');
+      rh.className = 'board-header';
+      rh.textContent = String.fromCharCode(65 + y);
+      container.appendChild(rh);
+
+      for (let x = 0; x < 10; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+
+        const key = `${x},${y}`;
+        const attack = board.attacks[y][x];
+        const planeType = planeMap[key];
+
+        // 先画飞机
+        if (planeType === 'head') {
+          cell.classList.add('plane-head');
+          cell.textContent = '✈';
+        } else if (planeType === 'body') {
+          cell.classList.add('plane-body');
+        }
+
+        // 叠加攻击标记
+        if (attack === 'miss') {
+          cell.classList.add('my-miss');
+        } else if (attack === 'hit') {
+          cell.classList.add('my-hit');
+        } else if (attack === 'kill') {
+          cell.classList.add('my-hit');
+        }
+
+        container.appendChild(cell);
+      }
+    }
+  }
+
+  renderAttackBoard(containerId, defenderBoard) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const corner = document.createElement('div');
+    corner.className = 'board-header board-corner';
+    container.appendChild(corner);
+    for (let x = 0; x < 10; x++) {
+      const h = document.createElement('div');
+      h.className = 'board-header';
+      h.textContent = x;
+      container.appendChild(h);
+    }
+
+    for (let y = 0; y < 10; y++) {
+      const rh = document.createElement('div');
+      rh.className = 'board-header';
+      rh.textContent = String.fromCharCode(65 + y);
+      container.appendChild(rh);
+
+      for (let x = 0; x < 10; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+
+        const attack = defenderBoard.attacks[y][x];
+
+        if (attack === 'miss') {
+          cell.classList.add('attack-miss');
+          cell.textContent = '×';
+        } else if (attack === 'hit') {
+          cell.classList.add('attack-hit');
+          cell.textContent = '伤';
+        } else if (attack === 'kill') {
+          cell.classList.add('attack-kill');
+          cell.textContent = '落';
+        } else {
+          // 未攻击的格子可点击（包括已击落飞机的未攻击部位）
+          cell.classList.add('clickable');
+          cell.addEventListener('click', () => this.onAttackClick(x, y));
+        }
+
+        container.appendChild(cell);
+      }
+    }
+  }
+
+  onAttackClick(x, y) {
+    if (this.phase !== 'battle') return;
+
+    const defender = this.currentPlayer === 1 ? 2 : 1;
+    const defenderBoard = this.boards[defender - 1];
+    const result = defenderBoard.receiveAttack(x, y);
+
+    if (result.type === 'duplicate') return;
+
+    const coord = `${String.fromCharCode(65 + y)}${x}`;
+    let logClass, logText, popupClass, popupText;
+
+    if (result.type === 'miss') {
+      logText = `玩家${this.currentPlayer} → (${coord}) 击空`;
+      logClass = 'log-miss';
+      popupText = '击空';
+      popupClass = 'miss';
+    } else if (result.type === 'hit') {
+      logText = `玩家${this.currentPlayer} → (${coord}) 击伤!`;
+      logClass = 'log-hit';
+      popupText = '击伤!';
+      popupClass = 'hit';
+    } else if (result.type === 'kill') {
+      logText = `玩家${this.currentPlayer} → (${coord}) 击落!!`;
+      logClass = 'log-kill';
+      popupText = '击落!!';
+      popupClass = 'kill';
+    }
+
+    this.logs.push({ text: logText, cls: logClass });
+    this.showResultPopup(popupText, popupClass);
+
+    // 重新渲染战场
+    this.renderBattle();
+
+    // 检查胜利
+    if (defenderBoard.isAllDestroyed()) {
+      setTimeout(() => this.gameOver(this.currentPlayer), 1200);
+      return;
+    }
+
+    // 延迟后切换回合
+    setTimeout(() => this.switchTurn(), 1200);
+  }
+
+  showResultPopup(text, cls) {
+    const popup = document.createElement('div');
+    popup.className = `result-popup ${cls}`;
+    popup.textContent = text;
+    document.body.appendChild(popup);
+    setTimeout(() => popup.remove(), 1000);
+  }
+
+  switchTurn() {
+    const nextPlayer = this.currentPlayer === 1 ? 2 : 1;
+    if (nextPlayer === 1) this.round++;
+
+    this.showOverlay(
+      `请将设备交给 玩家 ${nextPlayer}`,
+      `轮到玩家 ${nextPlayer} 攻击了`,
+      `我是玩家 ${nextPlayer}，准备好了`,
+      () => {
+        this.currentPlayer = nextPlayer;
+        this.renderBattle();
+      }
+    );
+  }
+
+  renderLog() {
+    const el = document.getElementById('attack-log');
+    el.innerHTML = this.logs.map(l => `<div class="${l.cls}">${l.text}</div>`).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ---- 结算阶段 ----
+  gameOver(winner) {
+    this.phase = 'gameover';
+    document.getElementById('winner-text').textContent = `玩家 ${winner} 获胜！`;
+    this.showScreen('screen-gameover');
+
+    // 显示双方完整棋盘
+    this.renderGameoverBoard('gameover-board1', this.boards[0]);
+    this.renderGameoverBoard('gameover-board2', this.boards[1]);
+  }
+
+  renderGameoverBoard(containerId, board) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const corner = document.createElement('div');
+    corner.className = 'board-header board-corner';
+    container.appendChild(corner);
+    for (let x = 0; x < 10; x++) {
+      const h = document.createElement('div');
+      h.className = 'board-header';
+      h.textContent = x;
+      container.appendChild(h);
+    }
+
+    const planeMap = {};
+    board.planes.forEach(plane => {
+      const head = plane.getHeadPoint();
+      planeMap[`${head.x},${head.y}`] = 'head';
+      plane.getBodyPoints().forEach(p => {
+        planeMap[`${p.x},${p.y}`] = 'body';
+      });
+    });
+
+    for (let y = 0; y < 10; y++) {
+      const rh = document.createElement('div');
+      rh.className = 'board-header';
+      rh.textContent = String.fromCharCode(65 + y);
+      container.appendChild(rh);
+
+      for (let x = 0; x < 10; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+
+        const key = `${x},${y}`;
+        const ptype = planeMap[key];
+        const attack = board.attacks[y][x];
+
+        if (ptype === 'head') {
+          cell.classList.add('plane-head');
+          cell.textContent = '✈';
+        } else if (ptype === 'body') {
+          cell.classList.add('plane-body');
+        }
+
+        if (attack === 'miss') {
+          if (!ptype) {
+            cell.classList.add('attack-miss');
+            cell.textContent = '×';
+          }
+        } else if (attack === 'hit') {
+          cell.classList.add('attack-hit');
+          cell.textContent = '伤';
+        } else if (attack === 'kill') {
+          cell.classList.add('attack-kill');
+          cell.textContent = '落';
+        }
+
+        container.appendChild(cell);
+      }
+    }
+  }
+}
+
+// =====================================================
+// 初始化
+// =====================================================
+const game = new Game();
+
+// 键盘快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') {
+    if (game.phase === 'setup') {
+      game.rotatePreview();
+    }
+  }
+});
+</script>
+</body>
+</html>

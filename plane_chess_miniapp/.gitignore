@@ -1,0 +1,13 @@
+# 微信小程序
+miniprogram_npm/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

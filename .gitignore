@@ -1,0 +1,21 @@
+# WeChat Mini Game
+miniprogram_npm/
+node_modules/
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# WorkBuddy
+.workbuddy/
+
+# Sensitive config
+project.private.config.json

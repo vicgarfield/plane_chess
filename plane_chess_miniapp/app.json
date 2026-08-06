@@ -1,0 +1,9 @@
+{
+  "window": {
+    "navigationBarTitleText": "棋盘飞机对战",
+    "navigationBarBackgroundColor": "#0f0c29",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0f0c29"
+  },
+  "sitemapLocation": "sitemap.json"
+}
