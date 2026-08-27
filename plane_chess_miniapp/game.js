@@ -349,14 +349,14 @@ function renderStart() {
   const guideBtnH = 44;
   const guideBtnY = btnY + btnH + 12;
 
-  // 转发按钮（主动转发）
-  const shareBtnW = 160;
-  const shareBtnH = 40;
+  // 转发按钮（主动转发，与指引按钮同尺寸同色）
+  const shareBtnW = guideBtnW;
+  const shareBtnH = guideBtnH;
   const shareBtnY = guideBtnY + guideBtnH + 12;
 
   buttons = [
     new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE'),
-    new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, C.btnWarning, 'showGuide'),
+    new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, C.btnSuccess, 'showGuide'),
     new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share')
   ];
 
