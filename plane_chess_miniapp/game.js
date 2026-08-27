@@ -24,40 +24,72 @@ canvas.height = H * DPR;
 const SAFE_TOP = (sysInfo.safeArea || {}).top || 0;
 
 // ==================== 颜色常量 ====================
+// 统一深空蓝主题：背景深蓝渐变 + 金橙主色 + 翡翠/玫红点缀
 const C = {
-  bg: '#0f0c29',
+  // 背景（深空蓝渐变）
+  bgTop: '#0b1026',
+  bgBottom: '#1a2444',
+  bg: '#101736',
+  panelBg: 'rgba(6,10,28,0.82)',
+
+  // 标题/强调
   title: '#ffd200',
-  titleDark: '#f7971e',
-  cellBg: 'rgba(255,255,255,0.08)',
-  cellBgHover: 'rgba(255,255,255,0.14)',
-  gridLine: 'rgba(255,255,255,0.12)',
-  headerBg: 'rgba(255,255,255,0.05)',
-  planeHead: '#e74c3c',
-  planeBody: '#2ecc71',
-  miss: '#95a5a6',
-  hitBg: '#f39c12',
-  killBg: '#e74c3c',
-  previewValid: 'rgba(46,204,113,0.25)',
-  previewInvalid: 'rgba(231,76,60,0.25)',
-  previewHeadValid: 'rgba(46,204,113,0.45)',
-  previewHeadInvalid: 'rgba(231,76,60,0.45)',
-  btnPrimary: '#f7971e',
-  btnSuccess: '#2ecc71',
-  btnDanger: '#e74c3c',
-  btnWarning: '#f39c12',
-  btnText: '#fff',
-  text: '#ddd',
-  textDim: '#888',
-  textGray: '#999',
-  ruleBoxBg: 'rgba(255,255,255,0.06)',
-  logMiss: '#95a5a6',
-  logHit: '#f39c12',
-  logKill: '#e74c3c',
-  popupMissBg: 'rgba(149,165,166,0.85)',
-  popupHitBg: 'rgba(243,156,18,0.85)',
-  popupKillBg: 'rgba(231,76,60,0.85)',
+  titleDark: '#ff9f43',
+  titleGlow: 'rgba(255,210,0,0.45)',
+
+  // 棋盘
+  cellBg: 'rgba(255,255,255,0.055)',
+  cellBgHover: 'rgba(255,255,255,0.13)',
+  gridLine: 'rgba(255,255,255,0.09)',
+  headerBg: 'rgba(255,255,255,0.075)',
+  headerText: '#7d8db0',
+
+  // 飞机
+  planeHead: '#ff4d6d',
+  planeHeadGlow: 'rgba(255,77,109,0.65)',
+  planeBody: '#2dd4a7',
+
+  // 攻击结果
+  miss: '#5c6c8a',
+  hitBg: '#ffb020',
+  hitGlow: 'rgba(255,176,32,0.55)',
+  killBg: '#ff4d6d',
+  killGlow: 'rgba(255,77,109,0.65)',
+
+  // 布阵预览
+  previewValid: 'rgba(45,212,167,0.20)',
+  previewInvalid: 'rgba(255,77,109,0.20)',
+  previewHeadValid: 'rgba(45,212,167,0.48)',
+  previewHeadInvalid: 'rgba(255,77,109,0.48)',
+
+  // 文字
+  text: '#e8ecf4',
+  textDim: '#8b97b5',
+  textGray: '#9aa5c4',
+  ruleBoxBg: 'rgba(255,255,255,0.045)',
+  ruleBoxBorder: 'rgba(255,255,255,0.10)',
+
+  // 日志
+  logMiss: '#5c6c8a',
+  logHit: '#ffb020',
+  logKill: '#ff4d6d',
+
+  // 弹窗
+  popupMissBg: 'rgba(92,108,138,0.93)',
+  popupHitBg: 'rgba(255,176,32,0.93)',
+  popupKillBg: 'rgba(255,77,109,0.93)',
+
   overlayBg: 'rgba(0,0,0,0.6)',
   waitBg: 'rgba(0,0,0,0.55)',
+};
+
+// 按钮样式表：渐变配色（from → to），统一胶囊 + 高光 + 投影
+const BTN = {
+  primary: { from: '#ffc24b', to: '#ff8a00' }, // 金橙（主操作）
+  warning: { from: '#ffc24b', to: '#ff9f43' }, // 暖橙（次级操作）
+  success: { from: '#37d6ab', to: '#12a37f' }, // 翡翠（确认/分享）
+  danger:  { from: '#ff6b81', to: '#e63950' }, // 玫红（退出/认输）
+  ghost:   { from: '#3d4a6e', to: '#2a324e' }, // 暗蓝（次要）
 };
 
 // ==================== 游戏状态 ====================
@@ -117,30 +149,115 @@ function fillRoundRect(x, y, w, h, r) {
   ctx.fill();
 }
 
-function drawText(text, x, y, color, size, align) {
+function strokeRoundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawText(text, x, y, color, size, align, bold) {
   ctx.fillStyle = color || C.text;
-  ctx.font = `${size || L.fontSize}px sans-serif`;
+  ctx.font = `${bold ? 'bold ' : ''}${size || L.fontSize}px sans-serif`;
   ctx.textAlign = align || 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y);
 }
 
+// 发光标题（游戏主标题 / 结算标题）
+function drawTitle(text, x, y, size, color) {
+  ctx.save();
+  ctx.shadowColor = C.titleGlow;
+  ctx.shadowBlur = 22;
+  drawText(text, x, y, color || C.title, size || 50, 'center', 'bold');
+  ctx.restore();
+}
+
+// 背景渐变 + 星点装饰
+let stars = null;
+function initStars() {
+  stars = [];
+  const count = Math.min(46, Math.floor(W * H / 12000));
+  for (let i = 0; i < count; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.3 + 0.4,
+      a: Math.random() * 0.4 + 0.08
+    });
+  }
+}
+
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, C.bgTop);
+  grad.addColorStop(1, C.bgBottom);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 星点（每帧微闪，营造夜空感）
+  if (!stars) initStars();
+  const t = Date.now() / 1000;
+  for (let i = 0; i < stars.length; i++) {
+    const s = stars[i];
+    ctx.globalAlpha = s.a * (0.75 + 0.25 * Math.sin(t + i * 1.7));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ==================== 按钮系统 ====================
 
-function Button(label, x, y, w, h, color, action) {
+function Button(label, x, y, w, h, style, action) {
   this.label = label;
   this.x = x;
   this.y = y;
   this.w = w;
   this.h = h;
-  this.color = color;
+  this.style = style || 'primary';
   this.action = action;
 }
 
 Button.prototype.draw = function () {
-  ctx.fillStyle = this.color;
-  fillRoundRect(this.x, this.y, this.w, this.h, 6);
-  drawText(this.label, this.x + this.w / 2, this.y + this.h / 2, C.btnText, Math.floor(this.h * 0.42), 'center');
+  const s = BTN[this.style] || BTN.primary;
+  const r = Math.min(this.h / 2, 18);
+
+  // 底部投影（立体感）
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+
+  // 渐变填充
+  const grad = ctx.createLinearGradient(0, this.y, 0, this.y + this.h);
+  grad.addColorStop(0, s.from);
+  grad.addColorStop(1, s.to);
+  ctx.fillStyle = grad;
+  fillRoundRect(this.x, this.y, this.w, this.h, r);
+  ctx.restore();
+
+  // 顶部高光带（玻璃质感）
+  ctx.fillStyle = 'rgba(255,255,255,0.20)';
+  fillRoundRect(this.x + 2, this.y + 1.5, this.w - 4, Math.max(3, this.h * 0.42), Math.min(this.h * 0.35, 10));
+
+  // 文字：加粗 + 微投影
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 2;
+  ctx.shadowOffsetY = 1;
+  drawText(this.label, this.x + this.w / 2, this.y + this.h / 2 + 1, '#ffffff', Math.floor(this.h * 0.44), 'center', 'bold');
+  ctx.restore();
 };
 
 Button.prototype.hitTest = function (px, py) {
@@ -167,9 +284,12 @@ function drawBoard(board, boardY, boardType, opts) {
   const showPlanes = opts.showPlanes !== false;
   const showAttacks = opts.showAttacks !== false;
 
-  // 背景
-  ctx.fillStyle = C.bg;
-  ctx.fillRect(L.boardX - 2, boardY - 2, L.boardPx + 4, L.boardPx + 4);
+  // 面板背景（深色底板 + 细边框，形成卡片感）
+  ctx.fillStyle = C.panelBg;
+  fillRoundRect(L.boardX - 3, boardY - 3, L.boardPx + 6, L.boardPx + 6, 8);
+  ctx.strokeStyle = C.ruleBoxBorder;
+  ctx.lineWidth = 1;
+  strokeRoundRect(L.boardX - 3, boardY - 3, L.boardPx + 6, L.boardPx + 6, 8);
 
   // 角标
   const cornerX = L.boardX;
@@ -206,9 +326,9 @@ function drawBoard(board, boardY, boardType, opts) {
 function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes, showAttacks) {
   const key = `${col},${row}`;
 
-  // 背景
+  // 背景（圆角格子）
   ctx.fillStyle = C.cellBg;
-  ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
+  fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
 
   if (boardType === 'setup') {
     // 预览
@@ -218,29 +338,37 @@ function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes
       } else {
         ctx.fillStyle = pmap[key].indexOf('invalid') >= 0 ? C.previewInvalid : C.previewValid;
       }
-      ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
+      fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
     }
     // 飞机
     if (showPlanes) {
       if (planeMap[key] === 'head') {
+        ctx.save();
+        ctx.shadowColor = C.planeHeadGlow;
+        ctx.shadowBlur = 7;
         ctx.fillStyle = C.planeHead;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
-        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center');
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
+        ctx.restore();
+        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center', 'bold');
       } else if (planeMap[key] === 'body') {
         ctx.fillStyle = C.planeBody;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
       }
     }
   } else if (boardType === 'my') {
     // 我方棋盘：显示飞机 + 受攻击标记
     if (showPlanes) {
       if (planeMap[key] === 'head') {
+        ctx.save();
+        ctx.shadowColor = C.planeHeadGlow;
+        ctx.shadowBlur = 7;
         ctx.fillStyle = C.planeHead;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
-        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center');
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
+        ctx.restore();
+        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center', 'bold');
       } else if (planeMap[key] === 'body') {
         ctx.fillStyle = C.planeBody;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
       }
     }
     if (showAttacks) {
@@ -256,15 +384,21 @@ function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes
         if (!planeMap[key]) {
           ctx.fillStyle = C.hitBg;
           ctx.beginPath();
-          ctx.arc(cx + L.cellSize / 2, cy + L.cellSize / 2, L.cellSize * 0.25, 0, Math.PI * 2);
+          ctx.arc(cx + L.cellSize / 2, cy + L.cellSize / 2, L.cellSize * 0.24, 0, Math.PI * 2);
           ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       } else if (atk === 'kill') {
         if (!planeMap[key]) {
           ctx.fillStyle = C.killBg;
           ctx.beginPath();
-          ctx.arc(cx + L.cellSize / 2, cy + L.cellSize / 2, L.cellSize * 0.25, 0, Math.PI * 2);
+          ctx.arc(cx + L.cellSize / 2, cy + L.cellSize / 2, L.cellSize * 0.26, 0, Math.PI * 2);
           ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       }
     }
@@ -273,49 +407,61 @@ function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes
     if (showAttacks) {
       const atk = board.attacks[row][col];
       if (atk === 'miss') {
-        drawText('\u00d7', cx + L.cellSize / 2, cy + L.cellSize / 2, C.miss, L.headerFontSize, 'center');
+        drawText('\u00d7', cx + L.cellSize / 2, cy + L.cellSize / 2, C.miss, L.headerFontSize, 'center', 'bold');
       } else if (atk === 'hit') {
+        ctx.save();
+        ctx.shadowColor = C.hitGlow;
+        ctx.shadowBlur = 6;
         ctx.fillStyle = C.hitBg;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
-        drawText('\u4f24', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center');
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
+        ctx.restore();
+        drawText('\u4f24', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center', 'bold');
       } else if (atk === 'kill') {
+        ctx.save();
+        ctx.shadowColor = C.killGlow;
+        ctx.shadowBlur = 8;
         ctx.fillStyle = C.killBg;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
-        drawText('\u843d', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center');
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
+        ctx.restore();
+        drawText('\u843d', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center', 'bold');
       }
     }
   } else if (boardType === 'gameover') {
     // 结算：显示飞机 + 攻击结果
     if (showPlanes) {
       if (planeMap[key] === 'head') {
+        ctx.save();
+        ctx.shadowColor = C.planeHeadGlow;
+        ctx.shadowBlur = 7;
         ctx.fillStyle = C.planeHead;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
-        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center');
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
+        ctx.restore();
+        drawText('\u2708', cx + L.cellSize / 2, cy + L.cellSize / 2, '#fff', L.headerFontSize, 'center', 'bold');
       } else if (planeMap[key] === 'body') {
         ctx.fillStyle = C.planeBody;
-        ctx.fillRect(cx, cy, L.cellSize, L.cellSize);
+        fillRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
       }
     }
     if (showAttacks) {
       const atk = board.attacks[row][col];
       if (atk === 'miss' && !planeMap[key]) {
-        drawText('\u00d7', cx + L.cellSize / 2, cy + L.cellSize / 2, C.miss, L.headerFontSize, 'center');
+        drawText('\u00d7', cx + L.cellSize / 2, cy + L.cellSize / 2, C.miss, L.headerFontSize, 'center', 'bold');
       } else if (atk === 'hit') {
         if (!planeMap[key]) {
-          drawText('\u4f24', cx + L.cellSize / 2, cy + L.cellSize / 2, C.hitBg, L.headerFontSize, 'center');
+          drawText('\u4f24', cx + L.cellSize / 2, cy + L.cellSize / 2, C.hitBg, L.headerFontSize, 'center', 'bold');
         }
       } else if (atk === 'kill') {
         if (!planeMap[key]) {
-          drawText('\u843d', cx + L.cellSize / 2, cy + L.cellSize / 2, C.killBg, L.headerFontSize, 'center');
+          drawText('\u843d', cx + L.cellSize / 2, cy + L.cellSize / 2, C.killBg, L.headerFontSize, 'center', 'bold');
         }
       }
     }
   }
 
-  // 网格线
+  // 网格线（圆角描边）
   ctx.strokeStyle = C.gridLine;
   ctx.lineWidth = 0.5;
-  ctx.strokeRect(cx, cy, L.cellSize, L.cellSize);
+  strokeRoundRect(cx, cy, L.cellSize, L.cellSize, 3);
 }
 
 function getCellFromTouch(tx, ty, boardY) {
@@ -334,36 +480,42 @@ function getAttackCellFromTouch(tx, ty, boardY) {
 function renderStart() {
   const cy = H / 2;
 
-  // 标题
-  drawText('\u68cb\u76d8\u98de\u673a\u5bf9\u6218', W / 2, cy - 170, C.title, 52, 'center');
-  drawText('\u68cb\u76d8\u4e0a\u7684\u535a\u5f08', W / 2, cy - 118, C.textDim, 22, 'center');
+  // 标题（发光 + 加粗 + 金色分隔线）
+  drawTitle('\u68cb\u76d8\u98de\u673a\u5bf9\u6218', W / 2, cy - 168);
+  ctx.strokeStyle = 'rgba(255,210,0,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 96, cy - 136);
+  ctx.lineTo(W / 2 + 96, cy - 136);
+  ctx.stroke();
+  drawText('\u68cb\u76d8\u4e0a\u7684\u535a\u5f08', W / 2, cy - 114, C.textDim, 20, 'center');
 
-  // 按钮
-  const btnW = 240;
+  // 按钮（胶囊渐变）
+  const btnW = 250;
   const btnH = 56;
   const btnX = (W - btnW) / 2;
-  const btnY = cy - 78;
+  const btnY = cy - 74;
 
   // 玩法指引按钮
-  const guideBtnW = 160;
-  const guideBtnH = 44;
+  const guideBtnW = 170;
+  const guideBtnH = 42;
   const guideBtnY = btnY + btnH + 12;
 
   // 转发按钮（主动转发）
-  const shareBtnW = 160;
-  const shareBtnH = 40;
-  const shareBtnY = guideBtnY + guideBtnH + 12;
+  const shareBtnW = 170;
+  const shareBtnH = 38;
+  const shareBtnY = guideBtnY + guideBtnH + 10;
 
   buttons = [
-    new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE'),
-    new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, C.btnWarning, 'showGuide'),
-    new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share')
+    new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, 'primary', 'startPvE'),
+    new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, 'warning', 'showGuide'),
+    new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, 'success', 'share')
   ];
 
   for (const b of buttons) b.draw();
 
-  // 规则说明
-  const rulesY = shareBtnY + shareBtnH + 20;
+  // 规则说明（卡片：渐变底 + 顶部金色标题线）
+  const rulesY = shareBtnY + shareBtnH + 18;
   const rules = [
     '1. \u4f60\u548c\u673a\u5668\u4eba\u5404\u62e5\u6709\u4e00\u4e2a 10\u00d710 \u68cb\u76d8\uff0c\u5404\u81ea\u5e03\u7f6e 3 \u67b6\u98de\u673a',
     '2. \u98de\u673a\u5f62\u72b6\uff0810\u683c\uff09\u4e3a\u201c\u58eb\u201d\u5b57\u5f62\uff0c\u53ef\u65cb\u8f6c 4 \u4e2a\u65b9\u5411',
@@ -372,11 +524,11 @@ function renderStart() {
     '5. \u9996\u5148\u51fb\u843d\u5bf9\u65b9\u5168\u90e8 3 \u67b6\u98de\u673a\u7684\u4e00\u65b9\u83b7\u80dc'
   ];
 
-  const titleFontSize = 18;
-  const ruleFontSize = 14;
-  const lineH = 24;
+  const titleFontSize = 17;
+  const ruleFontSize = 13.5;
+  const lineH = 23;
   const boxPadding = 14;
-  const titleBarH = 28;
+  const titleBarH = 30;
   const boxW = W - 32;
 
   const boxH = titleBarH + rules.length * lineH + boxPadding * 2;
@@ -384,17 +536,29 @@ function renderStart() {
   const boxX = 16;
 
   ctx.fillStyle = C.ruleBoxBg;
-  fillRoundRect(boxX, boxY, boxW, boxH, 10);
+  fillRoundRect(boxX, boxY, boxW, boxH, 12);
+  ctx.strokeStyle = C.ruleBoxBorder;
+  ctx.lineWidth = 1;
+  strokeRoundRect(boxX, boxY, boxW, boxH, 12);
 
-  drawText('\u6e38\u620f\u89c4\u5219', boxX + boxW / 2, boxY + boxPadding + titleBarH / 2, C.titleDark, titleFontSize, 'center');
+  drawText('\u6e38\u620f\u89c4\u5219', boxX + boxW / 2, boxY + boxPadding + titleBarH / 2, C.titleDark, titleFontSize, 'center', 'bold');
 
-  const ruleStartY = boxY + boxPadding + titleBarH + 2;
+  // 标题下金色渐变分隔线
+  const sepY = boxY + boxPadding + titleBarH + 6;
+  const sepGrad = ctx.createLinearGradient(boxX + 24, 0, boxX + boxW - 24, 0);
+  sepGrad.addColorStop(0, 'rgba(255,210,0,0)');
+  sepGrad.addColorStop(0.5, 'rgba(255,210,0,0.45)');
+  sepGrad.addColorStop(1, 'rgba(255,210,0,0)');
+  ctx.fillStyle = sepGrad;
+  ctx.fillRect(boxX + 24, sepY, boxW - 48, 1);
+
+  const ruleStartY = sepY + 8;
   for (let i = 0; i < rules.length; i++) {
     ctx.fillStyle = C.textGray;
     ctx.font = `${ruleFontSize}px sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(rules[i], boxX + 16, ruleStartY + i * lineH + lineH / 2);
+    ctx.fillText(rules[i], boxX + 18, ruleStartY + i * lineH + lineH / 2);
   }
 }
 
@@ -421,10 +585,10 @@ function wrapText(text, maxW, size) {
 }
 
 // 居中绘制多行文本，返回结束后的 y
-function drawWrappedText(text, centerX, y, maxW, lineH, color, size) {
+function drawWrappedText(text, centerX, y, maxW, lineH, color, size, bold) {
   const lines = wrapText(text, maxW, size);
   ctx.fillStyle = color;
-  ctx.font = `${size}px sans-serif`;
+  ctx.font = `${bold ? 'bold ' : ''}${size}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < lines.length; i++) {
@@ -471,13 +635,16 @@ function renderGuide() {
   const oneText = '\u4e00\u53e5\u8bdd\u73a9\u6cd5\uff1a\u85cf\u597d\u81ea\u5df1\u7684 3 \u67b6\u98de\u673a\uff0c\u731c\u51fa\u5bf9\u624b\u98de\u673a\u7684\u4f4d\u7f6e\uff0c\u8c01\u5148\u628a\u5bf9\u65b9 3 \u67b6\u5168\u90e8\u51fb\u843d\uff0c\u8c01\u5c31\u8d62\uff01';
   const oneLines = wrapText(oneText, contentW - 28, 15);
   const oneBoxH = oneLines.length * 22 + 20;
-  ctx.fillStyle = 'rgba(255,210,0,0.08)';
-  fillRoundRect(pad, y, contentW, oneBoxH, 10);
-  drawWrappedText(oneText, W / 2, y + 10, contentW - 28, 22, C.title, 15);
+  ctx.fillStyle = 'rgba(255,210,0,0.09)';
+  fillRoundRect(pad, y, contentW, oneBoxH, 12);
+  ctx.strokeStyle = 'rgba(255,210,0,0.25)';
+  ctx.lineWidth = 1;
+  strokeRoundRect(pad, y, contentW, oneBoxH, 12);
+  drawWrappedText(oneText, W / 2, y + 10, contentW - 28, 22, C.title, 15, true);
   y += oneBoxH + 24;
 
   // ① 飞机形状
-  drawText('\u2460 \u4f60\u7684\u98de\u673a\u957f\u8fd9\u6837', pad + 2, y, C.titleDark, 17, 'left');
+  drawText('\u2460 \u4f60\u7684\u98de\u673a\u957f\u8fd9\u6837', pad + 2, y, C.titleDark, 17, 'left', 'bold');
   y += 14;
   const cell = 24;
   const planeCy = y + 2 * (cell + 2);
@@ -495,7 +662,7 @@ function renderGuide() {
   y += 22;
 
   // ② 布阵
-  drawText('\u2461 \u5e03\u9635\uff1a\u628a 3 \u67b6\u98de\u673a\u85cf\u8fdb\u68cb\u76d8', pad + 2, y, C.titleDark, 17, 'left');
+  drawText('\u2461 \u5e03\u9635\uff1a\u628a 3 \u67b6\u98de\u673a\u85cf\u8fdb\u68cb\u76d8', pad + 2, y, C.titleDark, 17, 'left', 'bold');
   y += 10;
   ctx.font = '14px sans-serif';
   ctx.textAlign = 'left';
@@ -512,30 +679,33 @@ function renderGuide() {
     y += 24;
   }
 
-  // 布阵流程图
+  // 布阵流程图（翡翠渐变系）
   y += 6;
   const flowBoxH = 48;
   const flowGap = 20;
   const flowW = (contentW - flowGap * 2) / 3;
   const flowBoxes = [
-    { t: '\u98de\u673a\u9884\u89c8', s: '\u70b9\u51fb\u68cb\u76d8', fill: 'rgba(46,204,113,0.25)' },
-    { t: '\u653e\u7f6e 1/3', s: '\u518d\u70b9\u4e00\u6b21', fill: 'rgba(46,204,113,0.5)' },
-    { t: '\u786e\u8ba4\u5e03\u9635', s: '\u653e\u6ee1 3 \u67b6', fill: C.btnSuccess }
+    { t: '\u98de\u673a\u9884\u89c8', s: '\u70b9\u51fb\u68cb\u76d8', from: 'rgba(45,212,167,0.20)', to: 'rgba(45,212,167,0.40)' },
+    { t: '\u653e\u7f6e 1/3', s: '\u518d\u70b9\u4e00\u6b21', from: 'rgba(45,212,167,0.40)', to: 'rgba(45,212,167,0.65)' },
+    { t: '\u786e\u8ba4\u5e03\u9635', s: '\u653e\u6ee1 3 \u67b6', from: BTN.success.from, to: BTN.success.to }
   ];
   for (let i = 0; i < 3; i++) {
     const bx = pad + i * (flowW + flowGap);
-    ctx.fillStyle = flowBoxes[i].fill;
-    fillRoundRect(bx, y, flowW, flowBoxH, 8);
-    drawText(flowBoxes[i].t, bx + flowW / 2, y + 17, '#fff', 13, 'center');
+    const fg = ctx.createLinearGradient(0, y, 0, y + flowBoxH);
+    fg.addColorStop(0, flowBoxes[i].from);
+    fg.addColorStop(1, flowBoxes[i].to);
+    ctx.fillStyle = fg;
+    fillRoundRect(bx, y, flowW, flowBoxH, 10);
+    drawText(flowBoxes[i].t, bx + flowW / 2, y + 17, '#fff', 13, 'center', 'bold');
     drawText(flowBoxes[i].s, bx + flowW / 2, y + 34, 'rgba(255,255,255,0.85)', 11, 'center');
     if (i < 2) {
-      drawText('\u2192', bx + flowW + flowGap / 2, y + flowBoxH / 2, C.titleDark, 16, 'center');
+      drawText('\u2192', bx + flowW + flowGap / 2, y + flowBoxH / 2, C.titleDark, 16, 'center', 'bold');
     }
   }
   y += flowBoxH + 22;
 
   // ③ 开炮结果
-  drawText('\u2462 \u5f00\u70ae\uff1a\u70b9\u5bf9\u65b9\u68cb\u76d8\u4efb\u610f\u683c\u5b50', pad + 2, y, C.titleDark, 17, 'left');
+  drawText('\u2462 \u5f00\u70ae\uff1a\u70b9\u5bf9\u65b9\u68cb\u76d8\u4efb\u610f\u683c\u5b50', pad + 2, y, C.titleDark, 17, 'left', 'bold');
   y += 10;
   const rBoxW = (contentW - 16) / 3;
   const rBoxH = 76;
@@ -546,11 +716,16 @@ function renderGuide() {
   ];
   for (let i = 0; i < 3; i++) {
     const bx = pad + i * (rBoxW + 8);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
     ctx.fillStyle = results[i].bg;
-    fillRoundRect(bx, y, rBoxW, rBoxH, 8);
-    drawText(results[i].t, bx + rBoxW / 2, y + 18, '#fff', 15, 'center');
-    drawText(results[i].s1, bx + rBoxW / 2, y + 42, 'rgba(255,255,255,0.9)', 11, 'center');
-    drawText(results[i].s2, bx + rBoxW / 2, y + 58, 'rgba(255,255,255,0.9)', 11, 'center');
+    fillRoundRect(bx, y, rBoxW, rBoxH, 10);
+    ctx.restore();
+    drawText(results[i].t, bx + rBoxW / 2, y + 18, '#fff', 15, 'center', 'bold');
+    drawText(results[i].s1, bx + rBoxW / 2, y + 42, 'rgba(255,255,255,0.92)', 11, 'center');
+    drawText(results[i].s2, bx + rBoxW / 2, y + 58, 'rgba(255,255,255,0.92)', 11, 'center');
   }
   y += rBoxH + 14;
   y = drawWrappedText(
@@ -560,13 +735,16 @@ function renderGuide() {
   y += 20;
 
   // ④ 怎么赢
-  drawText('\u2463 \u600e\u4e48\u8d62', pad + 2, y, C.titleDark, 17, 'left');
+  drawText('\u2463 \u600e\u4e48\u8d62', pad + 2, y, C.titleDark, 17, 'left', 'bold');
   y += 10;
   const winText = '\u5148\u51fb\u843d\u5bf9\u65b9 3 \u67b6\u98de\u673a\uff08\u6253\u4e2d 3 \u4e2a\u673a\u5934\uff09\u7684\u4e00\u65b9\u83b7\u80dc\u3002\u5bf9\u6218\u65f6\u754c\u9762\u4e0a\u65b9\u662f\u5bf9\u624b\u68cb\u76d8\uff08\u70b9\u5b83\u5f00\u70ae\uff09\uff0c\u4e0b\u65b9\u662f\u4f60\u7684\u68cb\u76d8\uff0c\u53ef\u4e0a\u4e0b\u6ed1\u52a8\u67e5\u770b\u3002';
   const winLines = wrapText(winText, contentW - 24, 14);
   const winBoxH = winLines.length * 20 + 24;
-  ctx.fillStyle = 'rgba(46,204,113,0.12)';
-  fillRoundRect(pad, y, contentW, winBoxH, 8);
+  ctx.fillStyle = 'rgba(45,212,167,0.12)';
+  fillRoundRect(pad, y, contentW, winBoxH, 10);
+  ctx.strokeStyle = 'rgba(45,212,167,0.30)';
+  ctx.lineWidth = 1;
+  strokeRoundRect(pad, y, contentW, winBoxH, 10);
   drawWrappedText(winText, W / 2, y + 12, contentW - 24, 20, '#a9dfbf', 14);
   y += winBoxH + 22;
 
@@ -580,13 +758,13 @@ function renderGuide() {
   ctx.restore();
 
   // ---- 固定顶栏（返回按钮 + 标题）----
-  ctx.fillStyle = C.bg;
+  ctx.fillStyle = 'rgba(11,16,38,0.92)';
   ctx.fillRect(0, 0, W, topBarH);
-  ctx.fillStyle = C.gridLine;
+  ctx.fillStyle = 'rgba(255,210,0,0.18)';
   ctx.fillRect(0, topBarH - 1, W, 1);
-  guideBackBtn = new Button('\u2190 \u8fd4\u56de', 12, SAFE_TOP + 8, 76, 32, C.btnWarning, 'backToStart');
+  guideBackBtn = new Button('\u2190 \u8fd4\u56de', 12, SAFE_TOP + 8, 80, 34, 'warning', 'backToStart');
   guideBackBtn.draw();
-  drawText('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2, SAFE_TOP + 24, C.title, 18, 'center');
+  drawText('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2, SAFE_TOP + 24, C.title, 18, 'center', 'bold');
 }
 
 
@@ -596,8 +774,14 @@ function renderSetup() {
   const boardY = HEADER_H + 10;
   const board = game.getCurrentBoard();
 
+  // 顶部状态条
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(0, 0, W, HEADER_H);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(0, HEADER_H - 1, W, 1);
+
   // 标题
-  drawText('\u73a9\u5bb6 \u5e03\u9635', W / 2, SAFE_TOP + 24, C.text, 18, 'center');
+  drawText('\u73a9\u5bb6 \u5e03\u9635', W / 2, SAFE_TOP + 24, C.text, 18, 'center', 'bold');
   drawText('\u5728\u68cb\u76d8\u4e0a\u653e\u7f6e 3 \u67b6\u98de\u673a\uff08\u70b9\u51fb\u9884\u89c8\uff0c\u518d\u6b21\u70b9\u51fb\u653e\u7f6e\uff09', W / 2, SAFE_TOP + 42, C.textDim, 11, 'center');
 
   // 棋盘
@@ -606,8 +790,23 @@ function renderSetup() {
   // 控制面板
   const controlsY = boardY + L.boardPx + 12;
 
-  drawText(`\u5df2\u653e\u7f6e\uff1a${board.planes.length} / 3 \u67b6`, W / 2, controlsY, C.titleDark, 14, 'center');
-  drawText(`\u5f53\u524d\u65b9\u5411\uff1a${Plane.DIRECTION_NAMES[game.setupDirection]} ${Plane.DIRECTION_ARROWS[game.setupDirection]}`, W / 2, controlsY + 18, C.textDim, 12, 'center');
+  // 已放置徽章
+  const badgeW = 150;
+  const badgeH = 30;
+  ctx.fillStyle = 'rgba(255,159,67,0.14)';
+  fillRoundRect(W / 2 - badgeW / 2, controlsY - 4, badgeW, badgeH, badgeH / 2);
+  ctx.strokeStyle = 'rgba(255,159,67,0.4)';
+  ctx.lineWidth = 1;
+  strokeRoundRect(W / 2 - badgeW / 2, controlsY - 4, badgeW, badgeH, badgeH / 2);
+  drawText(`\u5df2\u653e\u7f6e\uff1a${board.planes.length} / 3 \u67b6`, W / 2, controlsY + 11, C.titleDark, 13, 'center', 'bold');
+
+  // 方向提示（两段式：说明文字 + 彩色箭头）
+  const dirLabel = `\u5f53\u524d\u65b9\u5411\uff1a${Plane.DIRECTION_NAMES[game.setupDirection]}`;
+  ctx.font = '12px sans-serif';
+  const dirLabelW = ctx.measureText(dirLabel).width;
+  const dirX = W / 2 - dirLabelW / 2;
+  drawText(dirLabel, dirX + dirLabelW / 2, controlsY + 28, C.textDim, 12, 'center');
+  drawText(Plane.DIRECTION_ARROWS[game.setupDirection], dirX + dirLabelW + 14, controlsY + 28, C.planeBody, 14, 'center', 'bold');
 
   // 按钮
   const btnW = 130;
@@ -616,15 +815,15 @@ function renderSetup() {
   const btnCount = board.planes.length >= 3 ? 3 : 2;
   const totalBtnW = btnW * btnCount + btnGap * (btnCount - 1);
   const btnStartX = (W - totalBtnW) / 2;
-  const btnY = controlsY + 36;
+  const btnY = controlsY + 38;
 
   buttons = [
-    new Button('\u65cb\u8f6c\u65b9\u5411', btnStartX, btnY, btnW, btnH, C.btnWarning, 'rotateDir'),
-    new Button('\u91cd\u7f6e\u5168\u90e8', btnStartX + btnW + btnGap, btnY, btnW, btnH, C.btnDanger, 'resetSetup'),
+    new Button('\u65cb\u8f6c\u65b9\u5411', btnStartX, btnY, btnW, btnH, 'warning', 'rotateDir'),
+    new Button('\u91cd\u7f6e\u5168\u90e8', btnStartX + btnW + btnGap, btnY, btnW, btnH, 'danger', 'resetSetup'),
   ];
 
   if (board.planes.length >= 3) {
-    buttons.push(new Button('\u786e\u8ba4\u5e03\u9635', btnStartX + (btnW + btnGap) * 2, btnY, btnW, btnH, C.btnSuccess, 'confirmSetup'));
+    buttons.push(new Button('\u786e\u8ba4\u5e03\u9635', btnStartX + (btnW + btnGap) * 2, btnY, btnW, btnH, 'success', 'confirmSetup'));
   }
 
   for (const b of buttons) b.draw();
@@ -639,11 +838,17 @@ function renderBattle() {
   ctx.save();
   ctx.translate(0, -scrollOffset);
 
+  // 顶部状态条
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(0, 0, W, HEADER_H);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(0, HEADER_H - 1, W, 1);
+
   // 标题
   const turnLabel = game.currentPlayer === 1
     ? '\u4f60\u7684\u56de\u5408 - \u8bf7\u5728\u673a\u5668\u4eba\u68cb\u76d8\u4e0a\u9009\u62e9\u653b\u51fb\u4f4d\u7f6e'
     : '\u673a\u5668\u4eba\u601d\u8003\u4e2d...';
-  drawText('\u5bf9\u6218\u9636\u6bb5', W / 2, SAFE_TOP + 12, C.text, 16, 'center');
+  drawText('\u5bf9\u6218\u9636\u6bb5', W / 2, SAFE_TOP + 12, C.text, 16, 'center', 'bold');
   drawText(turnLabel, W / 2, SAFE_TOP + 32, game.currentPlayer === 1 ? C.titleDark : C.textDim, 11, 'center');
 
   // 攻击棋盘（对手，点击开炮）
@@ -663,17 +868,30 @@ function renderBattle() {
   const myGridY = sepY + 12;
   drawBoard(game.boards[0], myGridY, 'my', { previewMap: {}, showAttacks: true });
 
-  // 统计
-  const statsY = myGridY + L.boardPx + 4;
+  // 统计徽章（三个小胶囊）
+  const statsY = myGridY + L.boardPx + 6;
   const myKills = game.boards[1].getKillCount();
   const otherKills = game.boards[0].getKillCount();
-  drawText(
-    `\u4f60 \u51fb\u843d: ${myKills}/3    \u673a\u5668\u4eba \u51fb\u843d: ${otherKills}/3    \u56de\u5408: ${game.round}`,
-    W / 2, statsY + 6, C.text, L.smallFontSize, 'center'
-  );
+  const badgeItems = [
+    { t: `\u4f60 ${myKills}/3`, color: C.titleDark, bg: 'rgba(255,159,67,0.15)' },
+    { t: `\u673a\u5668\u4eba ${otherKills}/3`, color: C.killBg, bg: 'rgba(255,77,109,0.15)' },
+    { t: `\u56de\u5408 ${game.round}`, color: C.textDim, bg: 'rgba(255,255,255,0.07)' }
+  ];
+  ctx.font = 'bold 12px sans-serif';
+  const badgeGap = 10;
+  const badgeW = badgeItems.map(b => ctx.measureText(b.t).width + 22);
+  const badgeTotal = badgeW.reduce((a, b) => a + b, 0) + badgeGap * 2;
+  let badgeX = W / 2 - badgeTotal / 2;
+  const badgeY = statsY;
+  for (let i = 0; i < badgeItems.length; i++) {
+    ctx.fillStyle = badgeItems[i].bg;
+    fillRoundRect(badgeX, badgeY, badgeW[i], 24, 12);
+    drawText(badgeItems[i].t, badgeX + badgeW[i] / 2, badgeY + 12, badgeItems[i].color, 12, 'center', 'bold');
+    badgeX += badgeW[i] + badgeGap;
+  }
 
   // 日志（最多4条）
-  const logY = statsY + 16;
+  const logY = statsY + 32;
   const recentLogs = game.logs.slice(-4);
   for (let i = 0; i < recentLogs.length; i++) {
     const l = recentLogs[i];
@@ -685,12 +903,12 @@ function renderBattle() {
   const logAreaH = Math.min(recentLogs.length, 4) * 13;
   const btnY2 = logY + logAreaH + 4;
   buttons = [
-    new Button('\u8ba4\u8f93', W / 2 - 36, btnY2, 72, 28, C.btnDanger, 'surrender')
+    new Button('\u8ba4\u8f93', W / 2 - 40, btnY2, 80, 32, 'danger', 'surrender')
   ];
   for (const b of buttons) b.draw();
 
   // 计算最大滚动距离（内容底部超出屏幕的高度）
-  const contentBottom = btnY2 + 28 + 20;
+  const contentBottom = btnY2 + 32 + 20;
   maxScroll = Math.max(0, contentBottom - H);
   if (scrollOffset > maxScroll) scrollOffset = maxScroll;
 
@@ -708,24 +926,60 @@ function renderBattle() {
 }
 
 function drawAIThinkingBar() {
-  const barY = H - 40;
-  ctx.fillStyle = 'rgba(46,204,113,0.15)';
-  ctx.fillRect(0, barY, W, 40);
-  drawText('\u673a\u5668\u4eba\u601d\u8003\u4e2d...', W / 2, barY + 20, C.btnSuccess, 14, 'center');
+  const barH = 46;
+  const barY = H - barH;
+
+  // 翡翠渐变底（上淡下浓）
+  const grad = ctx.createLinearGradient(0, barY, 0, H);
+  grad.addColorStop(0, 'rgba(45,212,167,0)');
+  grad.addColorStop(1, 'rgba(45,212,167,0.22)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, barY, W, barH);
+  ctx.fillStyle = 'rgba(45,212,167,0.25)';
+  ctx.fillRect(0, barY, W, 1);
+
+  // 呼吸点动画
+  const t = Date.now() / 450;
+  for (let i = 0; i < 3; i++) {
+    ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(t + i * 1.15));
+    ctx.fillStyle = C.planeBody;
+    ctx.beginPath();
+    ctx.arc(W / 2 - 46 + i * 18, barY + barH / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  drawText('\u673a\u5668\u4eba\u601d\u8003\u4e2d...', W / 2, barY + barH / 2, C.planeBody, 13, 'center', 'bold');
 }
 
 function drawAttackPopup() {
   if (!attackPopup) return;
   const { text, type } = attackPopup;
   const bgColor = type === 'miss' ? C.popupMissBg : type === 'hit' ? C.popupHitBg : C.popupKillBg;
-  const popupW = 160;
-  const popupH = 48;
+  const popupW = 190;
+  const popupH = 58;
   const popupX = (W - popupW) / 2;
   const popupY = H / 2 - popupH / 2;
 
+  // 阴影 + 渐变底
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 5;
   ctx.fillStyle = bgColor;
-  fillRoundRect(popupX, popupY, popupW, popupH, 12);
-  drawText(text, W / 2, popupY + popupH / 2, '#fff', 22, 'center');
+  fillRoundRect(popupX, popupY, popupW, popupH, 18);
+  ctx.restore();
+
+  // 顶部高光
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  fillRoundRect(popupX + 3, popupY + 2, popupW - 6, popupH * 0.42, 14);
+
+  // 文字
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.3)';
+  ctx.shadowBlur = 3;
+  drawText(text, W / 2, popupY + popupH / 2 + 1, '#fff', 24, 'center', 'bold');
+  ctx.restore();
 }
 
 // ==================== 结算画面 ====================
@@ -734,8 +988,8 @@ function renderGameover() {
   const totalH = 40 + 40 + L.boardPx * 2 + 60 + 60;
   const startY = H / 2 - totalH / 2 + 20;
 
-  // 标题
-  drawText('\u6e38\u620f\u7ed3\u675f', W / 2, startY, C.text, 24, 'center');
+  // 标题（发光）
+  drawTitle('\u6e38\u620f\u7ed3\u675f', W / 2, startY, 24, C.text);
 
   // 获胜者判断
   const iWon = game.winner === 1;
@@ -743,22 +997,26 @@ function renderGameover() {
     ? '\u606d\u559c\uff0c\u4f60\u8d62\u4e86\uff01'
     : '\u673a\u5668\u4eba\u83b7\u80dc\uff01';
   const winColor = iWon ? C.title : C.logKill;
-  drawText(winnerText, W / 2, startY + 28, winColor, 18, 'center');
+  ctx.save();
+  ctx.shadowColor = iWon ? C.titleGlow : C.killGlow;
+  ctx.shadowBlur = 14;
+  drawText(winnerText, W / 2, startY + 28, winColor, 18, 'center', 'bold');
+  ctx.restore();
 
   // 棋盘标签
   const b1Y = startY + 52;
-  drawText('\u4f60\u7684\u68cb\u76d8', W / 2, b1Y, C.textDim, L.smallFontSize, 'center');
+  drawText('\u4f60\u7684\u68cb\u76d8', W / 2, b1Y, C.textDim, L.smallFontSize, 'center', 'bold');
   drawBoard(game.boards[0], b1Y + 6, 'gameover', { showAttacks: true });
 
   const b2Y = b1Y + L.boardPx + 12;
-  drawText('\u673a\u5668\u4eba\u7684\u68cb\u76d8', W / 2, b2Y, C.textDim, L.smallFontSize, 'center');
+  drawText('\u673a\u5668\u4eba\u7684\u68cb\u76d8', W / 2, b2Y, C.textDim, L.smallFontSize, 'center', 'bold');
   drawBoard(game.boards[1], b2Y + 6, 'gameover', { showAttacks: true });
 
   // 重新开始 / 分享战绩按钮
   const btnY = b2Y + L.boardPx + 12;
   buttons = [
-    new Button('\u518d\u6765\u4e00\u5c40', W / 2 - 80, btnY, 160, 44, C.btnPrimary, 'restart'),
-    new Button('\u5206\u4eab\u6218\u7ee9', W / 2 - 80, btnY + 54, 160, 44, C.btnSuccess, 'share')
+    new Button('\u518d\u6765\u4e00\u5c40', W / 2 - 80, btnY, 160, 44, 'primary', 'restart'),
+    new Button('\u5206\u4eab\u6218\u7ee9', W / 2 - 80, btnY + 54, 160, 44, 'success', 'share')
   ];
   for (const b of buttons) b.draw();
 }
@@ -770,9 +1028,8 @@ function loop() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   calcLayout();
 
-  // 清屏
-  ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, W, H);
+  // 渐变背景 + 星点装饰
+  drawBackground();
 
   switch (phase) {
     case 'start': renderStart(); break;
