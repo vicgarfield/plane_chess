@@ -344,14 +344,20 @@ function renderStart() {
   const btnX = (W - btnW) / 2;
   const btnY = cy - 78;
 
+  // 转发按钮（主动转发）
+  const shareBtnW = 160;
+  const shareBtnH = 40;
+  const shareBtnY = btnY + btnH + 14;
+
   buttons = [
-    new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE')
+    new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE'),
+    new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share')
   ];
 
   for (const b of buttons) b.draw();
 
   // 规则说明
-  const rulesY = btnY + btnH + 28;
+  const rulesY = shareBtnY + shareBtnH + 24;
   const rules = [
     '1. \u4f60\u548c\u673a\u5668\u4eba\u5404\u62e5\u6709\u4e00\u4e2a 10\u00d710 \u68cb\u76d8\uff0c\u5404\u81ea\u5e03\u7f6e 3 \u67b6\u98de\u673a',
     '2. \u98de\u673a\u5f62\u72b6\uff0810\u683c\uff09\u4e3a\u201c\u58eb\u201d\u5b57\u5f62\uff0c\u53ef\u65cb\u8f6c 4 \u4e2a\u65b9\u5411',
@@ -551,10 +557,11 @@ function renderGameover() {
   drawText('\u673a\u5668\u4eba\u7684\u68cb\u76d8', W / 2, b2Y, C.textDim, L.smallFontSize, 'center');
   drawBoard(game.boards[1], b2Y + 6, 'gameover', { showAttacks: true });
 
-  // 重新开始按钮
+  // 重新开始 / 分享战绩按钮
   const btnY = b2Y + L.boardPx + 12;
   buttons = [
-    new Button('\u518d\u6765\u4e00\u5c40', W / 2 - 80, btnY, 160, 44, C.btnPrimary, 'restart')
+    new Button('\u518d\u6765\u4e00\u5c40', W / 2 - 80, btnY, 160, 44, C.btnPrimary, 'restart'),
+    new Button('\u5206\u4eab\u6218\u7ee9', W / 2 - 80, btnY + 54, 160, 44, C.btnSuccess, 'share')
   ];
   for (const b of buttons) b.draw();
 }
@@ -661,6 +668,10 @@ function handleButtonAction(action) {
     // 结算画面
     case 'restart':
       restartGame();
+      break;
+    // 转发分享（开始画面 / 结算画面）
+    case 'share':
+      shareToFriend();
       break;
   }
 }
@@ -858,19 +869,62 @@ wx.onTouchMove(function (e) {
   handleTouchMove(t.clientX, t.clientY);
 });
 
-// ==================== 转发功能 ====================
+// ==================== 转发与分享功能 ====================
 
-// 开启右上角转发菜单
+// 生成转发图片：截取 Canvas 当前画面（卡片最佳显示比例 5:4）
+function getShareImage() {
+  try {
+    return canvas.toTempFilePathSync({
+      x: 0,
+      y: 0,
+      width: canvas.width,
+      height: Math.floor(canvas.width * 0.8),
+      destWidth: 500,
+      destHeight: 400
+    });
+  } catch (e) {
+    return ''; // 截图失败时使用默认 logo
+  }
+}
+
+// 转发标题（结算画面根据胜负动态生成）
+function getShareTitle() {
+  if (phase === 'gameover') {
+    return game.winner === 1
+      ? '我在棋盘飞机对战击落了机器人全部飞机，来挑战我吧！'
+      : '机器人赢了这一盘，不服来战——棋盘飞机对战！';
+  }
+  return '棋盘飞机对战 - 来下一盘棋盘上的博弈吧！';
+}
+
+// 主动转发给好友（游戏内按钮触发）
+function shareToFriend() {
+  wx.shareAppMessage({
+    title: getShareTitle(),
+    imageUrl: getShareImage()
+  });
+}
+
+// 1. 开启右上角转发菜单（含"转发给好友"和"分享到朋友圈"两个入口）
 wx.showShareMenu({
   withShareTicket: true,
   menus: ['shareAppMessage', 'shareTimeline']
 });
 
-// 注册转发回调
+// 2. 被动转发回调：用户点右上角菜单"转发"时触发
 wx.onShareAppMessage(function () {
   return {
-    title: '\u68cb\u76d8\u98de\u673a\u5bf9\u6218 - \u6765\u4e0b\u4e00\u76d8\u68cb\u76d8\u4e0a\u7684\u535a\u5f08\u5427\uff01',
-    imageUrl: '' // 留空使用默认截图
+    title: getShareTitle(),
+    imageUrl: getShareImage()
+  };
+});
+
+// 3. 分享到朋友圈回调（基础库 2.12.0+，目前仅 Android 支持）
+wx.onShareTimeline(function () {
+  return {
+    title: getShareTitle(),
+    query: '',
+    imageUrl: '' // 留空使用小游戏 logo
   };
 });
 
