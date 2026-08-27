@@ -344,20 +344,26 @@ function renderStart() {
   const btnX = (W - btnW) / 2;
   const btnY = cy - 78;
 
+  // 玩法指引按钮
+  const guideBtnW = 160;
+  const guideBtnH = 44;
+  const guideBtnY = btnY + btnH + 12;
+
   // 转发按钮（主动转发）
   const shareBtnW = 160;
   const shareBtnH = 40;
-  const shareBtnY = btnY + btnH + 14;
+  const shareBtnY = guideBtnY + guideBtnH + 12;
 
   buttons = [
     new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE'),
+    new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, C.btnWarning, 'showGuide'),
     new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share')
   ];
 
   for (const b of buttons) b.draw();
 
   // 规则说明
-  const rulesY = shareBtnY + shareBtnH + 24;
+  const rulesY = shareBtnY + shareBtnH + 20;
   const rules = [
     '1. \u4f60\u548c\u673a\u5668\u4eba\u5404\u62e5\u6709\u4e00\u4e2a 10\u00d710 \u68cb\u76d8\uff0c\u5404\u81ea\u5e03\u7f6e 3 \u67b6\u98de\u673a',
     '2. \u98de\u673a\u5f62\u72b6\uff0810\u683c\uff09\u4e3a\u201c\u58eb\u201d\u5b57\u5f62\uff0c\u53ef\u65cb\u8f6c 4 \u4e2a\u65b9\u5411',
@@ -392,7 +398,198 @@ function renderStart() {
   }
 }
 
-// ==================== 布阵画面 ====================
+// ==================== 玩法指引画面 ====================
+
+let guideBackBtn = null; // 固定顶栏返回按钮（不随滚动移动）
+
+// 中文按字符换行：返回行数组
+function wrapText(text, maxW, size) {
+  ctx.font = `${size}px sans-serif`;
+  const lines = [];
+  let line = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (line && ctx.measureText(line + ch).width > maxW) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line += ch;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// 居中绘制多行文本，返回结束后的 y
+function drawWrappedText(text, centerX, y, maxW, lineH, color, size) {
+  const lines = wrapText(text, maxW, size);
+  ctx.fillStyle = color;
+  ctx.font = `${size}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], centerX, y + i * lineH + lineH / 2);
+  }
+  return y + lines.length * lineH;
+}
+
+// 绘制指南里的飞机形状（机头1 + 机翼5 + 机身1 + 尾翼3）
+function drawGuidePlane(cx, cy, cell) {
+  const unit = cell + 2;
+  const cells = [
+    { dx: 0, dy: -1, head: true },
+    { dx: -2, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: -1, dy: 2 }, { dx: 0, dy: 2 }, { dx: 1, dy: 2 }
+  ];
+  for (const c of cells) {
+    const x = cx + c.dx * unit - cell / 2;
+    const y = cy + c.dy * unit - cell / 2;
+    ctx.fillStyle = c.head ? C.planeHead : C.planeBody;
+    fillRoundRect(x, y, cell, cell, 3);
+    if (c.head) {
+      drawText('\u2708', x + cell / 2, y + cell / 2, '#fff', Math.floor(cell * 0.8), 'center');
+    }
+  }
+}
+
+function renderGuide() {
+  const topBarH = SAFE_TOP + 48;
+  const pad = 16;
+  const contentW = W - pad * 2;
+
+  // 指引页没有内容级按钮，清空避免误触上一画面的残留按钮
+  buttons = [];
+
+  // ---- 滚动内容 ----
+  ctx.save();
+  ctx.translate(0, -scrollOffset);
+
+  let y = topBarH + 18;
+
+  // 一句话玩法
+  const oneText = '\u4e00\u53e5\u8bdd\u73a9\u6cd5\uff1a\u85cf\u597d\u81ea\u5df1\u7684 3 \u67b6\u98de\u673a\uff0c\u731c\u51fa\u5bf9\u624b\u98de\u673a\u7684\u4f4d\u7f6e\uff0c\u8c01\u5148\u628a\u5bf9\u65b9 3 \u67b6\u5168\u90e8\u51fb\u843d\uff0c\u8c01\u5c31\u8d62\uff01';
+  const oneLines = wrapText(oneText, contentW - 28, 15);
+  const oneBoxH = oneLines.length * 22 + 20;
+  ctx.fillStyle = 'rgba(255,210,0,0.08)';
+  fillRoundRect(pad, y, contentW, oneBoxH, 10);
+  drawWrappedText(oneText, W / 2, y + 10, contentW - 28, 22, C.title, 15);
+  y += oneBoxH + 24;
+
+  // ① 飞机形状
+  drawText('\u2460 \u4f60\u7684\u98de\u673a\u957f\u8fd9\u6837', pad + 2, y, C.titleDark, 17, 'left');
+  y += 14;
+  const cell = 24;
+  const planeCy = y + 2 * (cell + 2);
+  drawGuidePlane(W / 2, planeCy, cell);
+  // 部件标注
+  const labelX = W / 2 + 3 * (cell + 2) + 4;
+  drawText('\u673a\u5934\u00d71', labelX, planeCy - (cell + 2), C.planeHead, 12, 'left');
+  drawText('\u673a\u7ffc\u00d75', labelX, planeCy, C.planeBody, 12, 'left');
+  drawText('\u5c3e\u7ffc\u00d73', labelX, planeCy + 2 * (cell + 2), C.planeBody, 12, 'left');
+  y = planeCy + 2 * (cell + 2) + cell / 2 + 18;
+  y = drawWrappedText(
+    '\u6bcf\u67b6\u98de\u673a\u5360 10 \u683c\uff1a\u7ea2\u8272\u673a\u5934\u00d71 + \u7eff\u8272\u673a\u8eab\u00d79\uff0c\u53ef\u671d\u4e0a\u4e0b\u5de6\u53f3 4 \u4e2a\u65b9\u5411\u6446\u653e',
+    W / 2, y, contentW, 20, C.textGray, 13
+  );
+  y += 22;
+
+  // ② 布阵
+  drawText('\u2461 \u5e03\u9635\uff1a\u628a 3 \u67b6\u98de\u673a\u85cf\u8fdb\u68cb\u76d8', pad + 2, y, C.titleDark, 17, 'left');
+  y += 10;
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.text;
+  const steps = [
+    '\u25b8 \u70b9\u4e00\u4e0b\u68cb\u76d8\uff0c\u51fa\u73b0\u98de\u673a\u9884\u89c8\uff08\u7eff\u8272=\u80fd\u653e\uff09',
+    '\u25b8 \u518d\u70b9\u540c\u4e00\u4e2a\u4f4d\u7f6e\uff0c\u98de\u673a\u843d\u5730',
+    '\u25b8 \u70b9\u300c\u65cb\u8f6c\u65b9\u5411\u300d\u6362\u671d\u5411\uff0c\u300c\u91cd\u7f6e\u5168\u90e8\u300d\u91cd\u6765',
+    '\u25b8 \u653e\u6ee1 3 \u67b6\u540e\uff0c\u70b9\u300c\u786e\u8ba4\u5e03\u9635\u300d\u5f00\u6218'
+  ];
+  for (const s of steps) {
+    ctx.fillText(s, pad + 6, y + 12);
+    y += 24;
+  }
+
+  // 布阵流程图
+  y += 6;
+  const flowBoxH = 48;
+  const flowGap = 20;
+  const flowW = (contentW - flowGap * 2) / 3;
+  const flowBoxes = [
+    { t: '\u98de\u673a\u9884\u89c8', s: '\u70b9\u51fb\u68cb\u76d8', fill: 'rgba(46,204,113,0.25)' },
+    { t: '\u653e\u7f6e 1/3', s: '\u518d\u70b9\u4e00\u6b21', fill: 'rgba(46,204,113,0.5)' },
+    { t: '\u786e\u8ba4\u5e03\u9635', s: '\u653e\u6ee1 3 \u67b6', fill: C.btnSuccess }
+  ];
+  for (let i = 0; i < 3; i++) {
+    const bx = pad + i * (flowW + flowGap);
+    ctx.fillStyle = flowBoxes[i].fill;
+    fillRoundRect(bx, y, flowW, flowBoxH, 8);
+    drawText(flowBoxes[i].t, bx + flowW / 2, y + 17, '#fff', 13, 'center');
+    drawText(flowBoxes[i].s, bx + flowW / 2, y + 34, 'rgba(255,255,255,0.85)', 11, 'center');
+    if (i < 2) {
+      drawText('\u2192', bx + flowW + flowGap / 2, y + flowBoxH / 2, C.titleDark, 16, 'center');
+    }
+  }
+  y += flowBoxH + 22;
+
+  // ③ 开炮结果
+  drawText('\u2462 \u5f00\u70ae\uff1a\u70b9\u5bf9\u65b9\u68cb\u76d8\u4efb\u610f\u683c\u5b50', pad + 2, y, C.titleDark, 17, 'left');
+  y += 10;
+  const rBoxW = (contentW - 16) / 3;
+  const rBoxH = 76;
+  const results = [
+    { t: '\ud83d\udca5 \u51fb\u843d', bg: C.popupKillBg, s1: '\u547d\u4e2d\u673a\u5934', s2: '\u6574\u67b6\u62a5\u5e9f' },
+    { t: '\u26a0 \u51fb\u4f24', bg: C.popupHitBg, s1: '\u547d\u4e2d\u673a\u8eab', s2: '\u53ea\u6389\u8840' },
+    { t: '\u00d7 \u51fb\u7a7a', bg: C.popupMissBg, s1: '\u6ca1\u6253\u4e2d', s2: '\u6392\u9664\u6b64\u683c' }
+  ];
+  for (let i = 0; i < 3; i++) {
+    const bx = pad + i * (rBoxW + 8);
+    ctx.fillStyle = results[i].bg;
+    fillRoundRect(bx, y, rBoxW, rBoxH, 8);
+    drawText(results[i].t, bx + rBoxW / 2, y + 18, '#fff', 15, 'center');
+    drawText(results[i].s1, bx + rBoxW / 2, y + 42, 'rgba(255,255,255,0.9)', 11, 'center');
+    drawText(results[i].s2, bx + rBoxW / 2, y + 58, 'rgba(255,255,255,0.9)', 11, 'center');
+  }
+  y += rBoxH + 14;
+  y = drawWrappedText(
+    '\ud83d\udca1 \u5173\u952e\uff1a\u53ea\u6709\u547d\u4e2d\u7ea2\u8272\u673a\u5934\u624d\u80fd\u51fb\u843d\u6574\u67b6\u98de\u673a\uff01\u6253\u673a\u8eab\u53ea\u662f\u51fb\u4f24\uff0c\u731c\u673a\u5934\u4f4d\u7f6e\u624d\u662f\u80dc\u8d1f\u624b\u3002',
+    W / 2, y, contentW - 8, 20, '#f5b7b1', 13
+  );
+  y += 20;
+
+  // ④ 怎么赢
+  drawText('\u2463 \u600e\u4e48\u8d62', pad + 2, y, C.titleDark, 17, 'left');
+  y += 10;
+  const winText = '\u5148\u51fb\u843d\u5bf9\u65b9 3 \u67b6\u98de\u673a\uff08\u6253\u4e2d 3 \u4e2a\u673a\u5934\uff09\u7684\u4e00\u65b9\u83b7\u80dc\u3002\u5bf9\u6218\u65f6\u754c\u9762\u4e0a\u65b9\u662f\u5bf9\u624b\u68cb\u76d8\uff08\u70b9\u5b83\u5f00\u70ae\uff09\uff0c\u4e0b\u65b9\u662f\u4f60\u7684\u68cb\u76d8\uff0c\u53ef\u4e0a\u4e0b\u6ed1\u52a8\u67e5\u770b\u3002';
+  const winLines = wrapText(winText, contentW - 24, 14);
+  const winBoxH = winLines.length * 20 + 24;
+  ctx.fillStyle = 'rgba(46,204,113,0.12)';
+  fillRoundRect(pad, y, contentW, winBoxH, 8);
+  drawWrappedText(winText, W / 2, y + 12, contentW - 24, 20, '#a9dfbf', 14);
+  y += winBoxH + 22;
+
+  drawText('\u2014\u2014 \u5c31\u8fd9\u4e48\u7b80\u5355\uff0c\u53bb\u8bd5\u8bd5\u5427 \u2708 \u2014\u2014', W / 2, y, C.textDim, 13, 'center');
+  y += 30;
+
+  // 滚动范围
+  maxScroll = Math.max(0, y - (H - 10));
+  if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+
+  ctx.restore();
+
+  // ---- 固定顶栏（返回按钮 + 标题）----
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, W, topBarH);
+  ctx.fillStyle = C.gridLine;
+  ctx.fillRect(0, topBarH - 1, W, 1);
+  guideBackBtn = new Button('\u2190 \u8fd4\u56de', 12, SAFE_TOP + 8, 76, 32, C.btnWarning, 'backToStart');
+  guideBackBtn.draw();
+  drawText('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2, SAFE_TOP + 24, C.title, 18, 'center');
+}
+
+
 
 function renderSetup() {
   const HEADER_H = SAFE_TOP + 50;
@@ -579,6 +776,7 @@ function loop() {
 
   switch (phase) {
     case 'start': renderStart(); break;
+    case 'guide': renderGuide(); break;
     case 'setup': renderSetup(); break;
     case 'battle': renderBattle(); break;
     case 'gameover': renderGameover(); break;
@@ -600,8 +798,14 @@ function handleTouchEnd(tx, ty) {
   // 滚动中不处理点击
   if (dragMoved) return;
 
-  // 对战页面需要补偿滚动偏移后再进行点击检测
-  const checkY = phase === 'battle' ? ty + scrollOffset : ty;
+  // 玩法指引：固定顶栏返回按钮（不随滚动偏移，用原始坐标检测）
+  if (phase === 'guide' && guideBackBtn && guideBackBtn.hitTest(tx, ty)) {
+    backToStart();
+    return;
+  }
+
+  // 对战/指引页面需要补偿滚动偏移后再进行点击检测
+  const checkY = (phase === 'battle' || phase === 'guide') ? ty + scrollOffset : ty;
 
   // 先检测按钮点击
   for (const b of buttons) {
@@ -628,7 +832,7 @@ function handleTouchEnd(tx, ty) {
 }
 
 function handleTouchMove(tx, ty) {
-  if (phase !== 'battle') return;
+  if (phase !== 'battle' && phase !== 'guide') return;
 
   const dy = ty - dragStartY;
   if (Math.abs(dy) < 4) return; // 防抖
@@ -643,6 +847,12 @@ function handleButtonAction(action) {
     // 开始画面
     case 'startPvE':
       startGame();
+      break;
+    case 'showGuide':
+      enterGuide();
+      break;
+    case 'backToStart':
+      backToStart();
       break;
     // 布阵画面
     case 'rotateDir':
@@ -807,6 +1017,24 @@ function handleGameoverTouch(tx, ty) {
 }
 
 // ==================== 游戏流程控制 ====================
+
+// 进入玩法指引页（从开始画面）
+function enterGuide() {
+  phase = 'guide';
+  scrollOffset = 0;
+  maxScroll = 0;
+  previewMap = {};
+  activePreview = null;
+  guideBackBtn = null;
+}
+
+// 从玩法指引页返回开始画面
+function backToStart() {
+  phase = 'start';
+  scrollOffset = 0;
+  maxScroll = 0;
+  guideBackBtn = null;
+}
 
 function startGame() {
   game.startGame('pve');
