@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>棋盘飞机对战 · 玩法指引</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0c29;
+    color: #ddd;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 32px 20px 48px;
+    line-height: 1.7;
+  }
+  h1 {
+    color: #ffd200;
+    text-align: center;
+    font-size: 28px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  .one-line {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,210,0,0.25);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 16px;
+    color: #ffd200;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .one-line b { color: #fff; }
+  section { margin-bottom: 36px; }
+  h2 {
+    color: #f7971e;
+    font-size: 19px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-num {
+    background: #f7971e;
+    color: #fff;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  figure {
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  figcaption { color: #999; font-size: 13px; margin-top: 8px; }
+  ul { list-style: none; padding-left: 4px; }
+  li { padding: 5px 0 5px 26px; position: relative; font-size: 15px; }
+  li::before {
+    content: "▸";
+    position: absolute;
+    left: 6px;
+    color: #f7971e;
+  }
+  .tip {
+    background: rgba(231,76,60,0.12);
+    border-left: 3px solid #e74c3c;
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    color: #f5b7b1;
+  }
+  .win {
+    background: rgba(46,204,113,0.12);
+    border-left: 3px solid #2ecc71;
+    padding: 12px 14px;
+    border-radius: 0 8px 8px 0;
+    font-size: 15px;
+    color: #a9dfbf;
+    text-align: center;
+  }
+  .win b { color: #2ecc71; }
+</style>
+</head>
+<body>
+
+<h1>棋盘飞机对战</h1>
+<p class="subtitle">3 分钟看懂的玩法指引</p>
+
+<p class="one-line">
+一句话玩法：<br>藏好自己的 <b>3 架飞机</b>，猜出对手飞机的位置，<br>谁先把对方 <b>3 架全部击落</b>，谁就赢！
+</p>
+
+<!-- ① 飞机形状 -->
+<section>
+  <h2><span class="step-num">1</span>你的飞机长这样</h2>
+  <figure>
+    <svg viewBox="0 0 260 190" width="260">
+      <!-- 网格 7列 x 5行, 格子34px -->
+      <!-- 网格线 -->
+      <g stroke="rgba(255,255,255,0.12)" stroke-width="1">
+        <!-- 竖线 x=10..248 step 34 -->
+        <line x1="10" y1="10" x2="10" y2="180"/>
+        <line x1="44" y1="10" x2="44" y2="180"/>
+        <line x1="78" y1="10" x2="78" y2="180"/>
+        <line x1="112" y1="10" x2="112" y2="180"/>
+        <line x1="146" y1="10" x2="146" y2="180"/>
+        <line x1="180" y1="10" x2="180" y2="180"/>
+        <line x1="214" y1="10" x2="214" y2="180"/>
+        <line x1="248" y1="10" x2="248" y2="180"/>
+        <!-- 横线 y=10..180 step 34 -->
+        <line x1="10" y1="10" x2="248" y2="10"/>
+        <line x1="10" y1="44" x2="248" y2="44"/>
+        <line x1="10" y1="78" x2="248" y2="78"/>
+        <line x1="10" y1="112" x2="248" y2="112"/>
+        <line x1="10" y1="146" x2="248" y2="146"/>
+        <line x1="10" y1="180" x2="248" y2="180"/>
+      </g>
+      <!-- 机头 (col 4, row 1) -->
+      <rect x="113" y="11" width="32" height="32" fill="#e74c3c" rx="3"/>
+      <text x="129" y="27" text-anchor="middle" fill="#fff" font-size="16">✈</text>
+      <!-- 机翼 row2: cols 2..6 -->
+      <rect x="45" y="45" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="79" y="45" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="113" y="45" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="147" y="45" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="181" y="45" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <!-- 机身 row3 col4 -->
+      <rect x="113" y="79" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <!-- 尾翼 row4 cols 3..5 -->
+      <rect x="79" y="113" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="113" y="113" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <rect x="147" y="113" width="32" height="32" fill="#2ecc71" rx="3"/>
+      <!-- 标注线：机头 -->
+      <line x1="145" y1="27" x2="235" y2="20" stroke="#e74c3c" stroke-width="1"/>
+      <text x="236" y="24" fill="#e74c3c" font-size="13" text-anchor="end" transform="translate(12,0)">机头</text>
+      <!-- 标注：机翼 -->
+      <line x1="197" y1="61" x2="235" y2="70" stroke="#2ecc71" stroke-width="1"/>
+      <text x="247" y="74" fill="#2ecc71" font-size="13" text-anchor="end" transform="translate(12,0)">机翼</text>
+      <!-- 标注：尾翼 -->
+      <line x1="163" y1="129" x2="235" y2="150" stroke="#2ecc71" stroke-width="1"/>
+      <text x="247" y="154" fill="#2ecc71" font-size="13" text-anchor="end" transform="translate(12,0)">尾翼</text>
+    </svg>
+    <figcaption>每架飞机占 10 格：红色<b style="color:#e74c3c">机头</b>×1 + 绿色<b style="color:#2ecc71">机身</b>×9，可朝上下左右 4 个方向摆放</figcaption>
+  </figure>
+</section>
+
+<!-- ② 布阵 -->
+<section>
+  <h2><span class="step-num">2</span>开局：把 3 架飞机藏进棋盘</h2>
+  <ul>
+    <li>点一下棋盘 → 出现<b style="color:#f7971e">飞机预览</b>（绿色=能放，红色=放不下）</li>
+    <li>再点同一个位置 → 飞机落地</li>
+    <li>想换朝向？点「旋转方向」；想重来？点「重置全部」</li>
+    <li>放满 3 架（不能重叠、不能出界）→ 点「确认布阵」</li>
+  </ul>
+  <figure>
+    <svg viewBox="0 0 440 70" width="440">
+      <g font-size="13">
+        <!-- 预览 -->
+        <rect x="8" y="10" width="120" height="50" rx="10" fill="rgba(46,204,113,0.25)" stroke="#2ecc71"/>
+        <text x="68" y="32" fill="#2ecc71" text-anchor="middle">绿色预览</text>
+        <text x="68" y="50" fill="#a9dfbf" text-anchor="middle" font-size="11">点击→再点击=放置</text>
+        <!-- 箭头 -->
+        <text x="150" y="40" fill="#f7971e" font-size="18">→</text>
+        <!-- 放置 -->
+        <rect x="170" y="10" width="120" height="50" rx="10" fill="rgba(46,204,113,0.5)" stroke="#2ecc71"/>
+        <text x="230" y="32" fill="#fff" text-anchor="middle">飞机已放置</text>
+        <text x="230" y="50" fill="#a9dfbf" text-anchor="middle" font-size="11">已放置：1 / 3 架</text>
+        <!-- 箭头 -->
+        <text x="312" y="40" fill="#f7971e" font-size="18">→</text>
+        <!-- 确认 -->
+        <rect x="332" y="10" width="100" height="50" rx="10" fill="#2ecc71"/>
+        <text x="382" y="40" fill="#fff" text-anchor="middle">确认布阵 ✓</text>
+      </g>
+    </svg>
+    <figcaption>布阵流程：预览 → 放置 → 3 架就绪后确认</figcaption>
+  </figure>
+</section>
+
+<!-- ③ 对战 -->
+<section>
+  <h2><span class="step-num">3</span>对战：在对方棋盘上开炮</h2>
+  <ul>
+    <li>点对方棋盘任意格子 = 开一炮，双方轮流进行</li>
+  </ul>
+  <figure>
+    <svg viewBox="0 0 440 110" width="440">
+      <g font-size="13">
+        <!-- 击落 -->
+        <rect x="10" y="15" width="130" height="80" rx="10" fill="rgba(231,76,60,0.85)"/>
+        <text x="75" y="45" fill="#fff" text-anchor="middle" font-size="20">💥 击落</text>
+        <text x="75" y="72" fill="#fadbd8" text-anchor="middle" font-size="11">打中机头</text>
+        <text x="75" y="88" fill="#fadbd8" text-anchor="middle" font-size="11">整架飞机报废！</text>
+        <!-- 击伤 -->
+        <rect x="155" y="15" width="130" height="80" rx="10" fill="rgba(243,156,18,0.85)"/>
+        <text x="220" y="45" fill="#fff" text-anchor="middle" font-size="20">⚠ 击伤</text>
+        <text x="220" y="72" fill="#fdebd0" text-anchor="middle" font-size="11">打中机身</text>
+        <text x="220" y="88" fill="#fdebd0" text-anchor="middle" font-size="11">只掉血，飞机还在</text>
+        <!-- 击空 -->
+        <rect x="300" y="15" width="130" height="80" rx="10" fill="rgba(149,165,166,0.6)"/>
+        <text x="365" y="45" fill="#fff" text-anchor="middle" font-size="20">✕ 击空</text>
+        <text x="365" y="72" fill="#e5e8e8" text-anchor="middle" font-size="11">什么都没打中</text>
+        <text x="365" y="88" fill="#e5e8e8" text-anchor="middle" font-size="11">这格可以排除</text>
+      </g>
+    </svg>
+    <figcaption>三种开炮结果</figcaption>
+  </figure>
+  <p class="tip">💡 关键：只有命中<b>红色机头</b>才能击落整架飞机！打机身只是击伤——所以猜机头位置才是胜负手。</p>
+</section>
+
+<!-- ④ 胜负 -->
+<section>
+  <h2><span class="step-num">4</span>怎么赢</h2>
+  <p class="win">先击落对方 <b>3 架飞机</b>（打中 3 个机头）的一方获胜。<br>界面上方是<b>对手棋盘</b>（点它开炮），下方是<b>你的棋盘</b>，可上下滑动查看。</p>
+</section>
+
+<p class="subtitle" style="margin-top:8px">—— 就这么简单，去试试吧 ✈ ——</p>
+
+</body>
+</html>
