@@ -858,5 +858,21 @@ wx.onTouchMove(function (e) {
   handleTouchMove(t.clientX, t.clientY);
 });
 
+// ==================== 转发功能 ====================
+
+// 开启右上角转发菜单
+wx.showShareMenu({
+  withShareTicket: true,
+  menus: ['shareAppMessage', 'shareTimeline']
+});
+
+// 注册转发回调
+wx.onShareAppMessage(function () {
+  return {
+    title: '\u68cb\u76d8\u98de\u673a\u5bf9\u6218 - \u6765\u4e0b\u4e00\u76d8\u68cb\u76d8\u4e0a\u7684\u535a\u5f08\u5427\uff01',
+    imageUrl: '' // 留空使用默认截图
+  };
+});
+
 // ==================== 启动游戏 ====================
 loop();
