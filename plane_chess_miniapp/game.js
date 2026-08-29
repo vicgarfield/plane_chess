@@ -77,6 +77,13 @@ let isDragging = false;
 let dragMoved = false;
 let popupStartTime = 0;
 
+// ==================== 教学模式状态 ====================
+// teachMode: 教学开关（持久化）；teachHint: 推荐开炮点 {x,y,mode,covered,attackedCount}；teachFlash: 攻击结果教学闪示
+let teachMode = wx.getStorageSync('teachMode') !== 'off';
+let teachHint = null;
+let teachFlash = null;
+let teachHintDirty = true;
+
 // ==================== 布局计算 ====================
 const L = {};
 
@@ -86,8 +93,10 @@ function calcLayout() {
 
   if (phase === 'battle' || phase === 'gameover') {
     // 对战/结算画面需要竖排放两个棋盘，格子按高度约束更小
+    // 教学模式下顶部多一条提示栏（44px），需要额外扣减
+    const teachBarH = (phase === 'battle' && teachMode) ? 44 : 0;
     const wCell = Math.floor((W - 16) / 11.5);
-    const hCell = Math.floor((H - SAFE_TOP - 140) / 23);
+    const hCell = Math.floor((H - SAFE_TOP - 140 - teachBarH) / 23);
     L.cellSize = Math.max(20, Math.min(wCell, hCell));
   } else {
     L.cellSize = Math.max(24, Math.min(34, Math.floor((W - 16) / 11.5)));
@@ -166,6 +175,7 @@ function drawBoard(board, boardY, boardType, opts) {
   const pmap = opts.previewMap || {};
   const showPlanes = opts.showPlanes !== false;
   const showAttacks = opts.showAttacks !== false;
+  const hintCell = opts.hintCell || null;
 
   // 背景
   ctx.fillStyle = C.bg;
@@ -198,12 +208,12 @@ function drawBoard(board, boardY, boardType, opts) {
     for (let col = 0; col < 10; col++) {
       const cx = boardCellX(col);
       const cy = boardCellY(row) + boardY;
-      drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes, showAttacks);
+      drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes, showAttacks, hintCell);
     }
   }
 }
 
-function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes, showAttacks) {
+function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes, showAttacks, hintCell) {
   const key = `${col},${row}`;
 
   // 背景
@@ -316,6 +326,16 @@ function drawCell(cx, cy, board, col, row, planeMap, pmap, boardType, showPlanes
   ctx.strokeStyle = C.gridLine;
   ctx.lineWidth = 0.5;
   ctx.strokeRect(cx, cy, L.cellSize, L.cellSize);
+
+  // 教学推荐格高亮：金框呼吸闪烁（仅攻击棋盘）
+  if (hintCell && hintCell.x === col && hintCell.y === row && boardType === 'attack') {
+    const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 300);
+    ctx.strokeStyle = `rgba(255,210,0,${pulse.toFixed(2)})`;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(cx + 1.5, cy + 1.5, L.cellSize - 3, L.cellSize - 3);
+    ctx.fillStyle = `rgba(255,210,0,${(pulse * 0.35).toFixed(2)})`;
+    ctx.fillRect(cx + 3, cy + 3, L.cellSize - 6, L.cellSize - 6);
+  }
 }
 
 function getCellFromTouch(tx, ty, boardY) {
@@ -357,7 +377,12 @@ function renderStart() {
   buttons = [
     new Button('\u5f00\u59cb\u4eba\u673a\u5bf9\u6218', btnX, btnY, btnW, btnH, C.btnPrimary, 'startPvE'),
     new Button('\u7b2c\u4e00\u6b21\u73a9\uff1f\u770b\u6307\u5f15', W / 2 - guideBtnW / 2, guideBtnY, guideBtnW, guideBtnH, C.btnSuccess, 'showGuide'),
-    new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share')
+    new Button('\u8f6c\u53d1\u7ed9\u597d\u53cb', W / 2 - shareBtnW / 2, shareBtnY, shareBtnW, shareBtnH, C.btnSuccess, 'share'),
+    // 教学提示开关（副标题与主按钮之间）
+    new Button(
+      teachMode ? '\u2714 \u6559\u5b66\u63d0\u793a\uff1a\u5f00' : '\u2718 \u6559\u5b66\u63d0\u793a\uff1a\u5173',
+      W / 2 - 118, cy - 97, 236, 28, teachMode ? C.btnSuccess : '#5a6272', 'toggleTeach'
+    )
   ];
 
   for (const b of buttons) b.draw();
@@ -632,8 +657,169 @@ function renderSetup() {
 
 // ==================== 对战画面 ====================
 
+// ==================== 教学模式 ====================
+
+// 攻击棋盘 Y 坐标（渲染与触摸检测共用，教学模式下为提示条留出空间）
+function battleAtkBoardY() {
+  const teachBarH = (phase === 'battle' && teachMode) ? 44 : 0;
+  return SAFE_TOP + 50 + teachBarH + 14;
+}
+
+/**
+ * 计算推荐开炮点（基于飞机几何推理）
+ * 策略：
+ *  1. Target 模式 - 有未击落的伤格时，穷举所有可能的机头位置，
+ *     排除与 miss/已击落飞机冲突的假设，推荐覆盖伤格最多的机头候选
+ *  2. Hunt 模式 - 无伤格时按棋盘格打法（隔一格）推荐未攻击格
+ */
+function computeTeachHint(board) {
+  const attacked = new Set();
+  const hits = [];
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) {
+      const a = board.attacks[y][x];
+      if (a) attacked.add(x + ',' + y);
+      if (a === 'hit') hits.push({ x, y });
+    }
+  }
+
+  // 排除已击落飞机覆盖的伤格（那些飞机不用再追了）
+  const sunkCells = new Set();
+  for (const p of board.destroyedPlanes) {
+    for (const pt of p.getPoints()) sunkCells.add(pt.x + ',' + pt.y);
+  }
+  const liveHits = hits.filter(h => !sunkCells.has(h.x + ',' + h.y));
+
+  // Target 模式：几何假设检验
+  if (liveHits.length > 0) {
+    const candidates = [];
+    for (let hy = 0; hy < 10; hy++) {
+      for (let hx = 0; hx < 10; hx++) {
+        for (const dir of Plane.ROTATION_ORDER) {
+          const pts = Plane.OFFSETS[dir].map(([dx, dy]) => ({ x: hx + dx, y: hy + dy }));
+          if (pts.some(p => p.x < 0 || p.x > 9 || p.y < 0 || p.y > 9)) continue;
+
+          let covered = 0;
+          let conflict = false;
+          for (const p of pts) {
+            const k = p.x + ',' + p.y;
+            if (sunkCells.has(k)) { conflict = true; break; }
+            const a = board.attacks[p.y][p.x];
+            if (a === 'hit') covered++;
+            else if (a === 'miss' || a === 'kill') { conflict = true; break; }
+          }
+          if (!conflict && covered > 0) {
+            candidates.push({ x: hx, y: hy, covered });
+          }
+        }
+      }
+    }
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => b.covered - a.covered);
+      return { x: candidates[0].x, y: candidates[0].y, mode: 'target', covered: candidates[0].covered, attackedCount: attacked.size };
+    }
+  }
+
+  // Hunt 模式：棋盘格打法（奇偶交叉，先中心区域）
+  for (let parity = 0; parity <= 1; parity++) {
+    for (let y = 0; y < 10; y++) {
+      for (let x = (y + parity) % 2; x < 10; x += 2) {
+        if (!attacked.has(x + ',' + y)) {
+          return { x, y, mode: 'hunt', covered: 0, attackedCount: attacked.size };
+        }
+      }
+    }
+  }
+  // 兜底：任意未攻击格
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) {
+      if (!attacked.has(x + ',' + y)) {
+        return { x, y, mode: 'hunt', covered: 0, attackedCount: attacked.size };
+      }
+    }
+  }
+  return null;
+}
+
+// 重算推荐点（棋盘状态变化后调用）
+function updateTeachHint() {
+  if (!teachMode || phase !== 'battle') {
+    teachHint = null;
+    return;
+  }
+  teachHint = computeTeachHint(game.boards[1]);
+}
+
+// 教学提示条文案（按情境动态生成）
+function getTeachTipText() {
+  if (!teachMode || phase !== 'battle') return '';
+
+  // 攻击结果教学闪示优先（约 2.2 秒）
+  if (teachFlash && Date.now() < teachFlash.until) return teachFlash.text;
+
+  // 机器人回合：观察学习提示
+  if (game.currentPlayer === 2) {
+    return '\u{1F440} \u770b\u673a\u5668\u4eba\u600e\u4e48\u6253\uff1a\u51fb\u4f24\u540e\u56f4\u7740\u4f24\u683c\u627e\u673a\u5934\uff0c\u5b83\u7684\u5957\u8def\u4f60\u4e5f\u80fd\u7528';
+  }
+
+  if (!teachHint) return '\u{1F4A1} \u70b9\u4e0a\u65b9\u673a\u5668\u4eba\u68cb\u76d8\u5f00\u70ae\uff0c\u91d1\u6846\u662f\u63a8\u8350\u70b9';
+
+  // 击伤推理提示
+  if (teachHint.mode === 'target') {
+    const kills = game.boards[1].getKillCount();
+    if (kills >= 2) return '\u{1F3C6} \u53ea\u5269\u6700\u540e 1 \u67b6\uff01\u5df2\u51fb\u4f24\u7684\u683c\u5b50\u8fde\u7740\u673a\u5934\uff0c\u8bd5\u8bd5\u91d1\u6846\u63a8\u8350\u70b9';
+    return '\u2708 \u5df2\u51fb\u4f24\uff01\u673a\u5934\u5c31\u5728\u4f24\u683c\u9644\u8fd1\uff0c\u8bd5\u8bd5\u91d1\u6846\u9ad8\u4eae\u7684\u683c\u5b50';
+  }
+
+  // Hunt 提示
+  if (teachHint.attackedCount === 0) {
+    return '\u2708 \u65b0\u624b\u7b2c\u4e00\u62db\uff1a\u98de\u673a\u5360 10 \u683c\u5f88\u5927\uff0c\u6309\u201c\u9694\u4e00\u683c\u201d\u8282\u594f\u626b\uff0c\u91d1\u6846\u662f\u63a8\u8350\u70b9';
+  }
+  const kills = game.boards[1].getKillCount();
+  if (kills >= 2) return '\u{1F3C6} \u53ea\u5269\u6700\u540e 1 \u67b6\uff01\u91d1\u6846\u662f\u63a8\u8350\u5f00\u70ae\u70b9';
+  return '\u{1F50D} \u7ee7\u7eed\u7528\u68cb\u76d8\u683c\u6253\u6cd5\u6269\u5927\u641c\u7d22\uff0c\u91d1\u6846\u662f\u63a8\u8350\u70b9';
+}
+
+// 绘制顶部教学提示条（固定位置，不随内容滚动）
+function drawTeachBar() {
+  const barY = SAFE_TOP + 38;
+  const barH = 44;
+  const barX = 8;
+  const barW = W - 16;
+
+  // 半透明底 + 金色边框
+  ctx.fillStyle = 'rgba(255,210,0,0.10)';
+  fillRoundRect(barX, barY, barW, barH, 8);
+  ctx.strokeStyle = 'rgba(255,210,0,0.45)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, barH - 1);
+
+  // 左侧图标
+  drawText('\u{1F4A1}', barX + 18, barY + barH / 2, '#fff', 16, 'center');
+
+  // 文案（超长自动换行，最多两行）
+  const text = getTeachTipText();
+  const maxW = barW - 44;
+  ctx.font = '11px sans-serif';
+  const lines = wrapText(text, maxW, 11);
+  const lineH = 15;
+  const startY = barY + barH / 2 - (Math.min(lines.length, 2) * lineH) / 2;
+  ctx.fillStyle = '#ffe97a';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < Math.min(lines.length, 2); i++) {
+    ctx.fillText(lines[i], barX + 34, startY + i * lineH + lineH / 2);
+  }
+}
+
 function renderBattle() {
-  const HEADER_H = SAFE_TOP + 50;
+  const HEADER_H = battleAtkBoardY() - 14;
+
+  // 教学模式：棋盘状态变化后重算推荐点
+  if (teachMode && teachHintDirty) {
+    updateTeachHint();
+    teachHintDirty = false;
+  }
 
   // 滚动偏移（内容整体上移，露出下方被遮挡部分）
   ctx.save();
@@ -649,11 +835,11 @@ function renderBattle() {
   // 攻击棋盘（对手，点击开炮）
   const atkBoardY = HEADER_H;
   drawText(
-    '\u673a\u5668\u4eba\u7684\u68cb\u76d8\uff08\u70b9\u51fb\u5f00\u70ae\uff09',
+    '\u673a\u5668\u4eba\u7684\u68cb\u76d8\uff08\u70b9\u51fb\u5f00\u70ae' + (teachMode ? '\uff0c\u91d1\u6846=\u63a8\u8350' : '') + '\uff09',
     W / 2, atkBoardY + 6, C.textDim, L.smallFontSize, 'center'
   );
   const atkGridY = atkBoardY + 14;
-  drawBoard(game.boards[1], atkGridY, 'attack', { previewMap: {}, showPlanes: false });
+  drawBoard(game.boards[1], atkGridY, 'attack', { previewMap: {}, showPlanes: false, hintCell: teachMode ? teachHint : null });
 
   // 分隔
   const sepY = atkGridY + L.boardPx + 4;
@@ -695,6 +881,11 @@ function renderBattle() {
   if (scrollOffset > maxScroll) scrollOffset = maxScroll;
 
   ctx.restore();
+
+  // 教学提示条（固定顶部，覆盖滚动内容，不受滚动影响）
+  if (teachMode) {
+    drawTeachBar();
+  }
 
   // AI 思考动画（固定底部）
   if (aiThinking) {
@@ -883,6 +1074,12 @@ function handleButtonAction(action) {
     case 'share':
       shareToFriend();
       break;
+    // 教学模式开关（开始画面）
+    case 'toggleTeach':
+      teachMode = !teachMode;
+      wx.setStorageSync('teachMode', teachMode ? 'on' : 'off');
+      wx.vibrateShort({ type: 'light' });
+      break;
   }
 }
 
@@ -940,7 +1137,7 @@ function updatePreview(x, y) {
 function handleBattleTouch(tx, ty) {
   if (game.currentPlayer !== 1 || game.phase !== 'battle') return;
 
-  const atkBoardY = SAFE_TOP + 50 + 14; // HEADER_H + atkGridY offset
+  const atkBoardY = battleAtkBoardY(); // HEADER_H + atkGridY offset
   const cell = getCellFromTouch(tx, ty, atkBoardY);
   if (!cell) return;
 
@@ -958,6 +1155,17 @@ function handleBattleTouch(tx, ty) {
   popupStartTime = Date.now();
 
   wx.vibrateShort({ type: result.type === 'kill' ? 'heavy' : 'medium' });
+
+  // 教学模式：攻击结果即时教学 + 标记重算推荐点
+  if (teachMode) {
+    const teachTexts = {
+      hit: '\u6253\u4e2d\u673a\u8eab\uff01\u53ea\u6389\u8840\u4e0d\u51fb\u843d\u2014\u2014\u673a\u5934\u5c31\u5728\u4f24\u683c\u9644\u8fd1 1\uff5e3 \u683c \u2708',
+      kill: '\u547d\u4e2d\u673a\u5934\uff01\u6574\u67b6\u62a5\u5e9f \u{1F4A5} \u7ee7\u7eed\u627e\u4e0b\u4e00\u67b6',
+      miss: '\u8fd9\u683c\u6ca1\u98de\u673a\uff0c\u6392\u9664\u4e00\u683c\u3002\u91d1\u6846\u4f1a\u63a8\u8350\u65b0\u70b9 \u{1F3AF}'
+    };
+    teachFlash = { text: teachTexts[result.type] || '', until: Date.now() + 2200 };
+    teachHintDirty = true;
+  }
 
   if (result.gameOver) {
     setTimeout(() => {
@@ -1007,6 +1215,11 @@ function executeAiTurn() {
 
   game.switchTurn();
 
+  // 教学模式：轮到玩家，重算推荐点
+  if (teachMode) {
+    teachHintDirty = true;
+  }
+
   setTimeout(() => {
     attackPopup = null;
   }, 900);
@@ -1045,6 +1258,9 @@ function startGame() {
   attackPopup = null;
   scrollOffset = 0;
   maxScroll = 0;
+  teachHint = null;
+  teachFlash = null;
+  teachHintDirty = true;
 }
 
 function confirmSetup() {
@@ -1054,6 +1270,11 @@ function confirmSetup() {
     previewMap = {};
     activePreview = null;
     aiThinking = false;
+    scrollOffset = 0;
+    maxScroll = 0;
+    teachHint = null;
+    teachFlash = null;
+    teachHintDirty = true; // 进入对战立即计算首个推荐点
   }
 }
 
@@ -1078,6 +1299,9 @@ function restartGame() {
   buttons = [];
   scrollOffset = 0;
   maxScroll = 0;
+  teachHint = null;
+  teachFlash = null;
+  teachHintDirty = true;
 }
 
 // ==================== 触摸事件绑定 ====================
