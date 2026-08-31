@@ -77,6 +77,44 @@ let isDragging = false;
 let dragMoved = false;
 let popupStartTime = 0;
 
+// ==================== 规则提示（纯文案讲解，帮助玩家边玩边熟悉规则） ====================
+let ruleTipsOn = true;      // 规则提示开关
+try { ruleTipsOn = wx.getStorageSync('ruleTips') !== false; } catch (e) { /* 存储不可用时用默认值 */ }
+let ruleToggleHit = null;   // 首页提示开关的点击热区
+
+function toggleRuleTips() {
+  ruleTipsOn = !ruleTipsOn;
+  try { wx.setStorageSync('ruleTips', ruleTipsOn); } catch (e) { /* 忽略存储失败 */ }
+}
+
+// 攻击结果对应的规则讲解文案
+function attackTipFor(type, isPlayer) {
+  const kills = isPlayer ? game.boards[1].getKillCount() : game.boards[0].getKillCount();
+  const left = 3 - kills;
+  if (type === 'kill') {
+    if (isPlayer) return left > 0 ? '\u547d\u4e2d\u7ea2\u8272\u673a\u5934\uff01\u6574\u67b6\u62a5\u5e9f\uff0c\u8fd8\u5269 ' + left + ' \u67b6' : '\u4e09\u67b6\u5168\u90e8\u51fb\u843d\uff0c\u4f60\u8d62\u4e86\uff01';
+    return '\u4f60\u7684\u673a\u5934\u88ab\u51fb\u4e2d\uff0c\u8fd9\u67b6\u62a5\u5e9f\uff08\u4f60\u8fd8\u5269 ' + left + ' \u67b6\uff09';
+  }
+  if (type === 'hit') {
+    return isPlayer
+      ? '\u6253\u4e2d\u673a\u8eab\u53ea\u662f\u51fb\u4f24\uff0c\u673a\u5934\u624d\u662f\u8981\u5bb3'
+      : '\u4f60\u7684\u673a\u8eab\u88ab\u51fb\u4f24\uff0c\u8fd9\u67b6\u98de\u673a\u8fd8\u80fd\u6218\u6597';
+  }
+  return isPlayer
+    ? '\u8fd9\u683c\u6ca1\u6709\u98de\u673a\uff0c\u5df2\u6392\u9664\u4e00\u683c'
+    : '\u673a\u5668\u4eba\u6253\u7a7a\u4e86\uff0c\u90a3\u683c\u4e0d\u662f\u4f60\u7684\u98de\u673a';
+}
+
+// 对战顶部/底部随局面变化的规则提示条文案
+function getRuleBannerText() {
+  if (!ruleTipsOn || game.currentPlayer !== 1) return '';
+  const myKills = game.boards[1].getKillCount();
+  if (myKills >= 2) return '\u6700\u540e 1 \u67b6\uff01\u627e\u51fa\u5b83\u7684\u7ea2\u8272\u673a\u5934\u5373\u53ef\u83b7\u80dc';
+  if (myKills >= 1) return '\u5df2\u51fb\u843d ' + myKills + ' \u67b6\uff0c\u8fd8\u9700\u627e\u5230 ' + (3 - myKills) + ' \u4e2a\u673a\u5934';
+  if (game.round <= 2) return '\u4e0a\u65b9\u662f\u673a\u5668\u4eba\u68cb\u76d8\uff0c\u70b9\u683c\u5b50\u5f00\u70ae\uff1b\u6bcf\u67b6\u98de\u673a\u5360 10 \u683c\uff0c\u673a\u5934\u88ab\u51fb\u4e2d\u624d\u7b97\u51fb\u843d';
+  return '\u89c4\u5219\uff1a\u547d\u4e2d\u673a\u5934=\u51fb\u843d\u6574\u67b6\uff0c\u6253\u673a\u8eab=\u51fb\u4f24\uff0c\u6ca1\u6253\u4e2d=\u51fb\u7a7a';
+}
+
 // ==================== 布局计算 ====================
 const L = {};
 
@@ -396,6 +434,13 @@ function renderStart() {
     ctx.textBaseline = 'middle';
     ctx.fillText(rules[i], boxX + 16, ruleStartY + i * lineH + lineH / 2);
   }
+
+  // 规则提示开关（对战中的规则讲解，可点击切换）
+  drawText(
+    (ruleTipsOn ? '\u89c4\u5219\u63d0\u793a\uff1a\u5f00' : '\u89c4\u5219\u63d0\u793a\uff1a\u5173') + '\uff08\u70b9\u51fb\u5207\u6362\uff09',
+    W / 2, H - 14, ruleTipsOn ? C.titleDark : C.textDim, 11, 'center'
+  );
+  ruleToggleHit = { x: W / 2 - 100, y: H - 32, w: 200, h: 32 };
 }
 
 // ==================== 玩法指引画面 ====================
@@ -699,6 +744,14 @@ function renderBattle() {
   // AI 思考动画（固定底部）
   if (aiThinking) {
     drawAIThinkingBar();
+  } else if (ruleTipsOn) {
+    // 规则提示条（固定底部，随局面更新）
+    const bannerText = getRuleBannerText();
+    if (bannerText) {
+      ctx.fillStyle = 'rgba(243,156,18,0.15)';
+      ctx.fillRect(0, H - 24, W, 24);
+      drawText(bannerText, W / 2, H - 12, '#f0c27f', 11, 'center');
+    }
   }
 
   // 攻击弹窗（固定居中，不受滚动影响）
@@ -716,16 +769,19 @@ function drawAIThinkingBar() {
 
 function drawAttackPopup() {
   if (!attackPopup) return;
-  const { text, type } = attackPopup;
+  const { text, type, tip } = attackPopup;
   const bgColor = type === 'miss' ? C.popupMissBg : type === 'hit' ? C.popupHitBg : C.popupKillBg;
-  const popupW = 160;
-  const popupH = 48;
+  const popupW = 220;
+  const popupH = tip ? 66 : 48;
   const popupX = (W - popupW) / 2;
   const popupY = H / 2 - popupH / 2;
 
   ctx.fillStyle = bgColor;
   fillRoundRect(popupX, popupY, popupW, popupH, 12);
-  drawText(text, W / 2, popupY + popupH / 2, '#fff', 22, 'center');
+  drawText(text, W / 2, popupY + (tip ? 20 : popupH / 2), '#fff', 22, 'center');
+  if (tip) {
+    drawText(tip, W / 2, popupY + popupH - 14, 'rgba(255,255,255,0.9)', 11, 'center');
+  }
 }
 
 // ==================== 结算画面 ====================
@@ -887,6 +943,12 @@ function handleButtonAction(action) {
 }
 
 function handleStartTouch(tx, ty) {
+  // 底部规则提示开关
+  if (ruleToggleHit && tx >= ruleToggleHit.x && tx <= ruleToggleHit.x + ruleToggleHit.w
+    && ty >= ruleToggleHit.y && ty <= ruleToggleHit.y + ruleToggleHit.h) {
+    toggleRuleTips();
+    wx.vibrateShort({ type: 'light' });
+  }
   // 规则框在按钮下方，无需特殊处理
 }
 
@@ -952,9 +1014,9 @@ function handleBattleTouch(tx, ty) {
   const result = game.executeAttack(col, row);
   if (!result) return;
 
-  // 显示弹窗
+  // 显示弹窗（含规则讲解）
   const display = game.getAttackDisplay(result.type);
-  attackPopup = { text: display.text, type: result.type };
+  attackPopup = { text: display.text, type: result.type, tip: ruleTipsOn ? attackTipFor(result.type, true) : '' };
   popupStartTime = Date.now();
 
   wx.vibrateShort({ type: result.type === 'kill' ? 'heavy' : 'medium' });
@@ -991,7 +1053,7 @@ function executeAiTurn() {
   }
 
   const display = game.getAttackDisplay(result.type);
-  attackPopup = { text: display.text, type: result.type };
+  attackPopup = { text: display.text, type: result.type, tip: ruleTipsOn ? attackTipFor(result.type, false) : '' };
   popupStartTime = Date.now();
 
   wx.vibrateShort({ type: result.type === 'kill' ? 'heavy' : 'medium' });
